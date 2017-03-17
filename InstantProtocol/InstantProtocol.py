@@ -1,3 +1,8 @@
+# InstantProtocol.py
+# Copyright (C) 2017
+# Jesús Alberto Polo (jesus.pologarcia@imt-atlantique.net)
+# Erika Tarazona (erika.tarazona@imt-atlantique.net)
+
 import struct
 import socket
 import sys
