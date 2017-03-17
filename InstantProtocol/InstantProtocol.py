@@ -1,6 +1,6 @@
 # InstantProtocol.py
 # Copyright (C) 2017
-# Jesús Alberto Polo (jesus.pologarcia@imt-atlantique.net)
+# Jesus Alberto Polo (jesus.pologarcia@imt-atlantique.net)
 # Erika Tarazona (erika.tarazona@imt-atlantique.net)
 
 import struct
@@ -65,7 +65,7 @@ class InstantProtocolMessage(object):
             self.options = None
             # Create different options depending on the type of the message
             if (self.ack == 1): self.options = _Acknowledgement()
-            elif (self.type == _ConnectionRequest.TYPE): self.options = _ConnectionRequest(rawdata=rawdata[self.HEADER_SIZE])
+            elif (self.type == _ConnectionRequest.TYPE): self.options = _ConnectionRequest(rawdata=rawdata[self.HEADER_SIZE:])
             elif (self.type == _ConnectionAccept.TYPE): self.options = _ConnectionAccept(rawdata=rawdata[self.HEADER_SIZE:])
             elif (self.type == _ConnectionReject.TYPE): self.options = _ConnectionReject(rawdata=rawdata[self.HEADER_SIZE:])
             elif (self.type == _UserListRequest.TYPE): self.options = _UserListRequest()
@@ -123,7 +123,6 @@ class _ConnectionRequest(object):
 
         elif rawdata:
             self.username = (struct.unpack(self.PSEUDOHEADER_FORMAT, rawdata)[0]).strip()
-            print self.username
 
         else:
             raise(ValueError)
