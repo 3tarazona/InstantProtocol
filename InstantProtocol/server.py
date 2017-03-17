@@ -3,7 +3,7 @@ import sys
 import struct
 import logging as log
 # Temporal
-execfile('InstantProtocol.py')
+from . import InstantProtocol
 
 class Server(object):
     def __init__(self, address=('localhost', 1313), buffer=1024):

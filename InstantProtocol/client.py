@@ -6,7 +6,7 @@ import signal
 import logging as log
 
 # Temporal
-execfile('InstantProtocol.py')
+from . import InstantProtocol
 
 class Client(object):
     def __init__(self, server_address=('localhost', 1313), buffer=1024):
