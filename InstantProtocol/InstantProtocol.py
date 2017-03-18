@@ -7,6 +7,11 @@ import struct
 import socket
 import sys
 
+# Custom Exception for unexpected behaviors
+class InstantProtocolException(Exception):
+    def __init__(self, message):
+        super(InstantProtocolException, self).__init__(message)
+
 # Base object -> it will create any message from application or network
 class InstantProtocolMessage(object):
     """
@@ -442,22 +447,24 @@ class _GroupInvitationRequest(object):
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     |   Type  |R|S|A|   Source ID   |    Group ID   | Header Length |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    |               |T|   Padding   |    Group ID   |
-    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |               |T|   Padding   |    Group ID   |   Client ID   |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     """
     TYPE = 0x09
-    PSEUDOHEADER_FORMAT = '>BB'
+    PSEUDOHEADER_FORMAT = '>BBB'
     PSEUDOHEADER_SIZE = struct.calcsize(PSEUDOHEADER_FORMAT)
 
     def __init__(self, dictdata=None, rawdata=None):
         if dictdata:
             self.type = dictdata.get('type')
             self.group_id = dictdata.get('group_id')
+            self.client_id = dic.get('client_id')
 
         elif rawdata:
             pseudoheader = struct.unpack(self.PSEUDOHEADER_FORMAT, rawdata)
             self.type = (pseudoheader[0] & 0x80) >> 7
             self.group_id = pseudoheader[1]
+            self.client_id = pseudoheader[2]
 
         else:
             raise(ValueError)
@@ -468,10 +475,10 @@ class _GroupInvitationRequest(object):
     def serialize(self):
         first_byte = 0x00
         first_byte |= self.type << 7
-        return struct.pack(self.PSEUDOHEADER_FORMAT, first_byte, self.group_id)
+        return struct.pack(self.PSEUDOHEADER_FORMAT, first_byte, self.group_id, self.client_id)
 
     def __repr__(self):
-        return '[type={}, group_id={}]'.format(self.type, self.group_id)
+        return '[type={}, group_id={}, client_id={}]'.format(self.type, self.group_id, self.client_id)
 
 class _GroupInvitationAccept(object):
     """

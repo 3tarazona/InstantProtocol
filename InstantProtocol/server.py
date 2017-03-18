@@ -3,14 +3,14 @@ import sys
 import struct
 import logging as log
 # Temporal
-from . import InstantProtocol
+execfile('InstantProtocol.py')
+execfile('Session.py')
 
 class Server(object):
     def __init__(self, address=('localhost', 1313), buffer=1024):
         self.address = address
-        self.client_id = 0 # no client id
-        self.group_id = 0 # no group
-        self.user_list = list()
+        self.pool_client_ids = range(1,255) # TODO: random
+        self.session_list = list()
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
         self.sock.bind(address)
         self.buffer = buffer
@@ -23,18 +23,42 @@ class Server(object):
                 data, client_address = self.sock.recvfrom(1024)
                 message_recv = InstantProtocolMessage(rawdata=data)
                 log.debug(message_recv)
-                message_send = InstantProtocolMessage(
-                                dictdata={'type': _ConnectionAccept.TYPE, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'client_id': 123}})
-                log.debug(message_send)
-                self.sock.sendto(message_send.serialize(), client_address)
 
-                data, client_address = self.sock.recvfrom(1024)
-                message_recv = InstantProtocolMessage(rawdata=data)
-                if (message_recv.type == _UserListRequest.TYPE):
-                    message_send = InstantProtocolMessage(dictdata={'type': 0x0E, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {
-                    'user_list': [{'client_id': 127, 'group_id': 119, 'username': 'Jesus', 'ip_address': '127.0.0.1', 'port': 1202},
-                        {'client_id': 128, 'group_id': 123, 'username': 'Erika', 'ip_address': '127.0.0.1', 'port': 1400}]}})
-                    self.sock.sendto(message_send.serialize(), client_address)
+                if (message_recv.ack == 0x01):
+                    for s in self.session_list:
+                        if (s.client_id == message_recv.source_id):
+                            s.acknowledgement(message_recv)
+                            break
+
+                elif (message_recv.type == _ConnectionRequest.TYPE):
+                    # Sending messages directly because session is not created yet
+                    new_username = message_recv.options.username
+                    if (any(s.username == new_username for s in self.session_list)):
+                        self.sock.sendto(InstantProtocolMessage(dictdata={'type': 0x02, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'error': 1}}).serialize(), client_address)
+                    elif (len(self.pool_client_ids) == 0):
+                        self.sock.sendto(InstantProtocolMessage(dictdata={'type': 0x02, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'error': 0}}).serialize(), client_address)
+                    else:
+                        # Create new session
+                        new_session = Session(self, new_username, self.pool_client_ids.pop(), client_address)
+                        self.session_list.append(new_session)
+                        self.sock.sendto(InstantProtocolMessage(dictdata={'type': _ConnectionAccept.TYPE, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'client_id': new_session.client_id}}).serialize(), client_address)
+                        log.info('User added')
+                        log.debug(self.session_list)
+
+                elif (message_recv.type == _UserListRequest.TYPE):
+                    for s in self.session_list:
+                        if (s.client_id == message_recv.source_id):
+                            s.user_list()
+                            break
+
+                elif (message_recv.type == _DataMessage.TYPE):
+                    for s in self.session_list:
+                        if (s.client_id == message_recv.source_id):
+                            s.data_message(message_recv)
+                            break
+
+                log.debug(self.session_list)
+
         except KeyboardInterrupt:
             log.info('Closing server...')
             self.sock.close()
