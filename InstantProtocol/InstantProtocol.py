@@ -270,7 +270,7 @@ class _UserListResponse(object):
             for i in range(len(rawdata) / self.PSEUDOHEADER_SIZE_REP):
                 offset = (i * self.PSEUDOHEADER_SIZE_REP)
                 rawclient = struct.unpack(self.PSEUDOHEADER_FORMAT_REP, rawdata[offset:(offset + self.PSEUDOHEADER_SIZE_REP)])
-                dictclient = dict(client_id=rawclient[0], group_id=rawclient[1], username=rawclient[2],
+                dictclient = dict(client_id=rawclient[0], group_id=rawclient[1], username=rawclient[2].rstrip('\0'),
                                     ip_address='{}.{}.{}.{}'.format(rawclient[3],rawclient[4],rawclient[5],rawclient[6]), port=rawclient[7])
                 self.user_list.append(dictclient)
         else:
@@ -640,7 +640,7 @@ class _UpdateList(object):
             for i in range(len(rawdata) / self.PSEUDOHEADER_SIZE_REP):
                 offset = (i * self.PSEUDOHEADER_SIZE_REP)
                 rawclient = struct.unpack(self.PSEUDOHEADER_FORMAT_REP, rawdata[offset:(offset + self.PSEUDOHEADER_SIZE_REP)])
-                dictclient = dict(client_id=rawclient[0], group_id=rawclient[1], username=rawclient[2],
+                dictclient = dict(client_id=rawclient[0], group_id=rawclient[1], username=rawclient[2].rstrip('\0'),
                                     ip_address='{}.{}.{}.{}'.format(rawclient[3],rawclient[4],rawclient[5],rawclient[6]), port=rawclient[7])
                 self.user_list.append(dictclient)
         else:
