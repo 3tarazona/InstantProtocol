@@ -14,6 +14,7 @@ class Session(object):
         self.last_seq_recv = 0
         self.state = self.STATE_ACK # Waiting for ACK of the connection
         self.message_queue = list()
+        self.timer = None
 
     def __repr__(self):
         return 'Session(username={}, client_id={}, group_id={}, group_type={}, last_seq_sent={}, las_seq_recv={}, state={})'.format(
@@ -32,22 +33,37 @@ class Session(object):
         self._send({'type': _UserListResponse.TYPE, 'ack': 0, 'source_id': self.client_id, 'group_id': self.group_id, 'options': {'user_list': users}})
 
     def data_message(self, message):
+        #self._send()
         for session in self.server.session_list:
             if ((session.client_id != self.client_id) and (session.group_id == self.group_id)):
                 session._send(dictdata={'type': message.type, 'ack': 0, 'source_id': self.client_id, 'group_id': self.group_id, 'options': {'data_length': message.options.data_length, 'payload': message.options.payload}})
 
-    def _send(self, dictdata):
+    def _send(self, dictdata, retry=1):
+        # When ACK not UDP reliable
         if (dictdata.get('ack') == 0x01):
             message = InstantProtocolMessage(dictdata=dictdata)
             self.server.sock.sendto(message.serialize(), self.address)
+        # UDP reliable
+        elif (retry == -1): #end of session
+            pass
+            #self.server.update_disconnection(self)
+        # First attempt
+        elif (retry == 1):
+            # Can we send?
+            if (self.state == self.STATE_IDLE)):
+                self.last_seq_sent = not self.last_seq_sent
+                dictdata['sequence'] = self.last_seq_sent
+                message = InstantProtocolMessage(dictdata=dictdata)
+                self.server.sock.sendto(message.serialize(), self.address)
+                self.state = self.STATE_ACK
+                # Timer to resend
+                self.timer = threading.Timer(10.0, _send, [dictdata, retry - 1])
 
-        elif (self.state == self.STATE_IDLE):
-            self.last_seq_sent = not self.last_seq_sent
-            dictdata['sequence'] = self.last_seq_sent
+            else: # self.state == self.STATE_ACK
+                message = InstantProtocolMessage(dictdata=dictdata)
+                self.message_queue.append(message)
+                self.timer = threading.Timer(10.0, _send, [dictdata, retry - 1])
+
+        elif (retry == 0):
             message = InstantProtocolMessage(dictdata=dictdata)
             self.server.sock.sendto(message.serialize(), self.address)
-            self.state = self.STATE_ACK
-
-        else:
-            message = InstantProtocolMessage(dictdata=dictdata)
-            self.message_queue.append(message)
