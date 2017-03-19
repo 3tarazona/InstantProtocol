@@ -44,9 +44,6 @@ class Session(object):
             message = InstantProtocolMessage(dictdata=dictdata)
             self.server.sock.sendto(message.serialize(), self.address)
         # UDP reliable
-        elif (retry == -1): #end of session
-            pass
-            #self.server.update_disconnection(self)
         # First attempt
         elif (retry == 1):
             # Can we send?
