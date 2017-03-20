@@ -32,7 +32,8 @@ class Server(object):
                 # ACK first because it's more important than type here
                 if (message_recv.ack == 0x01): # ACK
                     session = self._get_session(message_recv.source_id)
-                    session.acknowledgement(message_recv)
+                    if (session): # when ConnectionReject we can receive an ACK -> ignore it
+                        session.acknowledgement(message_recv)
 
                 elif (message_recv.type == ConnectionRequest.TYPE):
                     # Sending messages directly because session is not created yet
@@ -41,15 +42,15 @@ class Server(object):
                     if (len(self.pool_client_ids) == 0):
                         message_reject = InstantProtocolMessage(dictdata={'type': ConnectionReject.TYPE, 'sequence': 0, 'ack': 0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'error': 0}})
                         self.sock.sendto(message_reject.serialize(), client_address)
+                        log.info('[Connection] (Failed -> maximum reached) {}'.format(new_username))
                     elif (any(s.username == new_username for s in self.session_list)): # username not used
                         message_reject = InstantProtocolMessage(dictdata={'type': ConnectionReject.TYPE, 'sequence': 0, 'ack': 0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'error': 1}})
                         self.sock.sendto(message_reject.serialize(), client_address)
+                        log.info('[Connection] (Failed -> username already taken) {}'.format(new_username))
                     else:
                         # Create new session and add it to the list
                         new_session = ServerSession(self, new_username, self.pool_client_ids.pop(0), client_address)
                         self.session_list.append(new_session)
-
-                    log.debug(self.session_list)
 
                 elif (message_recv.type == UserListRequest.TYPE):
                     session = self._get_session(message_recv.source_id)
@@ -100,4 +101,4 @@ class Server(object):
 # Execution
 if __name__ == '__main__':
     log.basicConfig(format='%(levelname)s: %(message)s', level=log.DEBUG)
-    sys.exit(Server(loss_rate=25).run())
+    sys.exit(Server(loss_rate=0).run())

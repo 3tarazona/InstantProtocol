@@ -288,7 +288,7 @@ class UserListResponse(object):
         return serialization
 
     def __repr__(self):
-        return '[user_list=[{}]]'.format(self.user_list)
+        return '[user_list={}]'.format(self.user_list)
 
 class DataMessage(object):
     """
@@ -374,7 +374,7 @@ class GroupCreationRequest(object):
 
     def __repr__(self):
         client_list = ', '.join(str(client) for client in self.client_ids)
-        return '[type={}, client_ids=[{}]]'.format(self.type, client_list)
+        return '[type={}, client_ids={}]'.format(self.type, client_list)
 
 class GroupCreationAccept(object):
     """
@@ -658,7 +658,7 @@ class UpdateList(object):
         return serialization
 
     def __repr__(self):
-        return '[user_list=[{}]]'.format(self.user_list)
+        return '[user_list={}]'.format(self.user_list)
 
 class UpdateDisconnection(object):
     """

@@ -1,6 +1,6 @@
 import socket
 import random
-import log
+import logging as log
 
 class SocketError(object):
     def __init__(self, domain, transport, rate):
@@ -12,7 +12,7 @@ class SocketError(object):
         if test > self.error:
             return self._sock.sendto(*p)
         else :
-            log.debug(">> Packet loss")
+            log.warn("Packet loss")
 
     def recvfrom(self, *p):
         return self._sock.recvfrom(*p)
