@@ -39,7 +39,7 @@ class Server(object):
                         self.sock.sendto(InstantProtocolMessage(dictdata={'type': 0x02, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'error': 0}}).serialize(), client_address)
                     else:
                         # Create new session
-                        new_session = Session(self, new_username, self.pool_client_ids.pop(), client_address)
+                        new_session = Session(self, new_username, self.pool_client_ids.pop(0), client_address)
                         self.session_list.append(new_session)
                         self.sock.sendto(InstantProtocolMessage(dictdata={'type': _ConnectionAccept.TYPE, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'client_id': new_session.client_id}}).serialize(), client_address)
                         log.info('User added')
@@ -57,12 +57,25 @@ class Server(object):
                             s.data_message(message_recv)
                             break
 
-                log.debug(self.session_list)
+                #log.debug(self.session_list)
 
         except KeyboardInterrupt:
             log.info('Closing server...')
             self.sock.close()
             sys.exit(0)
+
+    def update_disconnection(self, session):
+        for s in self.session_list:
+            if (s != session):
+                s.send_update_disconnection(session)
+
+        #self.session_list.remove(session)
+
+
+    def update_users(self, session):
+        for s in self.session_list:
+            if (s != session):
+                s.send_update_users([session])
 
 # Execution
 if __name__ == '__main__':

@@ -74,8 +74,8 @@ class Client(object):
         message = InstantProtocolMessage(rawdata=data)
         log.debug(message)
         self.user_list = message.options.user_list
-        ack_connection = InstantProtocolMessage(dictdata={'type': _UserListResponse.TYPE, 'sequence': message.sequence, 'ack':1, 'source_id': self.client_id, 'group_id': self.group_id})
-        self.sock.sendto(ack_connection.serialize(), self.server_address)
+        ack_list = InstantProtocolMessage(dictdata={'type': _UserListResponse.TYPE, 'sequence': message.sequence, 'ack':1, 'source_id': self.client_id, 'group_id': self.group_id})
+        self.sock.sendto(ack_list.serialize(), self.server_address)
         # Connection done and list requested
 
     # Thread function (for reading user's input)
