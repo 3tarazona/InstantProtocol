@@ -1,17 +1,22 @@
 import socket
 import sys
 import struct
+import random
 import logging as log
+#from InstantProtocol import *
+#import SocketError
+#import ServerSession
 # Temporal
 execfile('InstantProtocol.py')
-execfile('Session.py')
+execfile('SocketError.py')
+execfile('ServerSession.py')
 
 class Server(object):
-    def __init__(self, address=('localhost', 1313), buffer=1024):
+    def __init__(self, address=('localhost', 1313), buffer=socket.SO_RCVBUF, loss_rate=10):
         self.address = address
-        self.pool_client_ids = range(1,255) # TODO: random
+        self.pool_client_ids = random.sample(xrange(1, 256), 255) # random client ids
         self.session_list = list()
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
+        self.sock = SocketError(socket.AF_INET, socket.SOCK_DGRAM, loss_rate) # UDP
         self.sock.bind(address)
         self.buffer = buffer
         ## Run
@@ -24,38 +29,61 @@ class Server(object):
                 message_recv = InstantProtocolMessage(rawdata=data)
                 log.debug(message_recv)
 
-                if (message_recv.ack == 0x01):
-                    for s in self.session_list:
-                        if (s.client_id == message_recv.source_id):
-                            s.acknowledgement(message_recv)
-                            break
+                # ACK first because it's more important than type here
+                if (message_recv.ack == 0x01): # ACK
+                    session = self._get_session(message_recv.source_id)
+                    session.acknowledgement(message_recv)
 
-                elif (message_recv.type == _ConnectionRequest.TYPE):
+                elif (message_recv.type == ConnectionRequest.TYPE):
                     # Sending messages directly because session is not created yet
                     new_username = message_recv.options.username
-                    if (any(s.username == new_username for s in self.session_list)):
-                        self.sock.sendto(InstantProtocolMessage(dictdata={'type': 0x02, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'error': 1}}).serialize(), client_address)
-                    elif (len(self.pool_client_ids) == 0):
-                        self.sock.sendto(InstantProtocolMessage(dictdata={'type': 0x02, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'error': 0}}).serialize(), client_address)
+                    # We don't create a session until it's successful
+                    if (len(self.pool_client_ids) == 0):
+                        message_reject = InstantProtocolMessage(dictdata={'type': ConnectionReject.TYPE, 'sequence': 0, 'ack': 0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'error': 0}})
+                        self.sock.sendto(message_reject.serialize(), client_address)
+                    elif (any(s.username == new_username for s in self.session_list)): # username not used
+                        message_reject = InstantProtocolMessage(dictdata={'type': ConnectionReject.TYPE, 'sequence': 0, 'ack': 0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'error': 1}})
+                        self.sock.sendto(message_reject.serialize(), client_address)
                     else:
-                        # Create new session
-                        new_session = Session(self, new_username, self.pool_client_ids.pop(0), client_address)
+                        # Create new session and add it to the list
+                        new_session = ServerSession(self, new_username, self.pool_client_ids.pop(0), client_address)
                         self.session_list.append(new_session)
-                        self.sock.sendto(InstantProtocolMessage(dictdata={'type': _ConnectionAccept.TYPE, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'client_id': new_session.client_id}}).serialize(), client_address)
-                        log.info('User added')
-                        log.debug(self.session_list)
 
-                elif (message_recv.type == _UserListRequest.TYPE):
-                    for s in self.session_list:
-                        if (s.client_id == message_recv.source_id):
-                            s.user_list()
-                            break
+                    log.debug(self.session_list)
 
-                elif (message_recv.type == _DataMessage.TYPE):
-                    for s in self.session_list:
-                        if (s.client_id == message_recv.source_id):
-                            s.data_message(message_recv)
-                            break
+                elif (message_recv.type == UserListRequest.TYPE):
+                    session = self._get_session(message_recv.source_id)
+                    session.user_list_response()
+
+                elif (message_recv.type == DataMessage.TYPE):
+                    session = self._get_session(message_recv.source_id)
+                    session.data_message(message_recv)
+
+                elif (message_recv.type == GroupCreationRequest.TYPE):
+                    pass
+
+                elif (message_recv.type == GroupCreationAccept.TYPE):
+                    pass
+
+                elif (message_recv.type == GroupCreationReject.TYPE):
+                    pass
+
+                elif (message_recv.type == GroupInvitationRequest.TYPE):
+                    pass
+
+                elif (message_recv.type == GroupInvitationAccept.TYPE):
+                    pass
+
+                elif (message_recv.type == GroupInvitationReject.TYPE):
+                    pass
+
+                elif (message_recv.type == GroupDisjointRequest.TYPE):
+                    pass
+
+                elif (message_recv.type == DisconnectionRequest.TYPE):
+                    session = self._get_session(message_recv.source_id)
+                    if (session): # it's possible to loose an ACK when disconnection (ignore this message because the session isn't longer available)
+                        session.disconnection_request(message_recv)
 
                 #log.debug(self.session_list)
 
@@ -64,20 +92,12 @@ class Server(object):
             self.sock.close()
             sys.exit(0)
 
-    def update_disconnection(self, session):
+    def _get_session(self, source_id):
         for s in self.session_list:
-            if (s != session):
-                s.send_update_disconnection(session)
-
-        #self.session_list.remove(session)
-
-
-    def update_users(self, session):
-        for s in self.session_list:
-            if (s != session):
-                s.send_update_users([session])
+            if (s.client_id == source_id):
+                return s
 
 # Execution
 if __name__ == '__main__':
     log.basicConfig(format='%(levelname)s: %(message)s', level=log.DEBUG)
-    sys.exit(Server().run())
+    sys.exit(Server(loss_rate=25).run())

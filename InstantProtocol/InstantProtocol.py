@@ -36,24 +36,24 @@ class InstantProtocolMessage(object):
             self.group_id = dictdata.get('group_id')
             self.options = None
             # Create different options depending on the type of the message (Factory function could be created...)
-            if (self.ack == 1): self.options = _Acknowledgement()
-            elif (self.type == _ConnectionRequest.TYPE): self.options = _ConnectionRequest(dictdata=dictdata.get('options'))
-            elif (self.type == _ConnectionAccept.TYPE): self.options = _ConnectionAccept(dictdata=dictdata.get('options'))
-            elif (self.type == _ConnectionReject.TYPE): self.options = _ConnectionReject(dictdata=dictdata.get('options'))
-            elif (self.type == _UserListRequest.TYPE): self.options = _UserListRequest()
-            elif (self.type == _UserListResponse.TYPE): self.options = _UserListResponse(dictdata=dictdata.get('options'))
-            elif (self.type == _DataMessage.TYPE): self.options = _DataMessage(dictdata=dictdata.get('options'))
-            elif (self.type == _GroupCreationRequest.TYPE): self.options = _GroupCreationRequest(dictdata=dictdata.get('options'))
-            elif (self.type == _GroupCreationAccept.TYPE): self.options = _GroupCreationAccept(dictdata=dictdata.get('options'))
-            elif (self.type == _GroupCreationReject.TYPE): self.options = _GroupCreationReject()
-            elif (self.type == _GroupInvitationRequest.TYPE): self.options = _GroupInvitationRequest(dictdata=dictdata.get('options'))
-            elif (self.type == _GroupInvitationAccept.TYPE): self.options = _GroupInvitationAccept(dictdata=dictdata.get('options'))
-            elif (self.type == _GroupInvitationReject.TYPE): self.options = _GroupInvitationReject(dictdata=dictdata.get('options'))
-            elif (self.type == _GroupDisjointRequest.TYPE): self.options = _GroupDisjointRequest()
-            elif (self.type == _GroupDissolution.TYPE): self.options = _GroupDissolution()
-            elif (self.type == _UpdateList.TYPE): self.options = _UpdateList(dictdata=dictdata.get('options'))
-            elif (self.type == _UpdateDisconnection.TYPE): self.options = _UpdateDisconnection(dictdata=dictdata.get('options'))
-            elif (self.type == _DisconnectionRequest.TYPE): self.options = _DisconnectionRequest()
+            if (self.ack == 1): self.options = Acknowledgement()
+            elif (self.type == ConnectionRequest.TYPE): self.options = ConnectionRequest(dictdata=dictdata.get('options'))
+            elif (self.type == ConnectionAccept.TYPE): self.options = ConnectionAccept(dictdata=dictdata.get('options'))
+            elif (self.type == ConnectionReject.TYPE): self.options = ConnectionReject(dictdata=dictdata.get('options'))
+            elif (self.type == UserListRequest.TYPE): self.options = UserListRequest()
+            elif (self.type == UserListResponse.TYPE): self.options = UserListResponse(dictdata=dictdata.get('options'))
+            elif (self.type == DataMessage.TYPE): self.options = DataMessage(dictdata=dictdata.get('options'))
+            elif (self.type == GroupCreationRequest.TYPE): self.options = GroupCreationRequest(dictdata=dictdata.get('options'))
+            elif (self.type == GroupCreationAccept.TYPE): self.options = GroupCreationAccept(dictdata=dictdata.get('options'))
+            elif (self.type == GroupCreationReject.TYPE): self.options = GroupCreationReject()
+            elif (self.type == GroupInvitationRequest.TYPE): self.options = GroupInvitationRequest(dictdata=dictdata.get('options'))
+            elif (self.type == GroupInvitationAccept.TYPE): self.options = GroupInvitationAccept(dictdata=dictdata.get('options'))
+            elif (self.type == GroupInvitationReject.TYPE): self.options = GroupInvitationReject(dictdata=dictdata.get('options'))
+            elif (self.type == GroupDisjointRequest.TYPE): self.options = GroupDisjointRequest()
+            elif (self.type == GroupDissolution.TYPE): self.options = GroupDissolution()
+            elif (self.type == UpdateList.TYPE): self.options = UpdateList(dictdata=dictdata.get('options'))
+            elif (self.type == UpdateDisconnection.TYPE): self.options = UpdateDisconnection(dictdata=dictdata.get('options'))
+            elif (self.type == DisconnectionRequest.TYPE): self.options = DisconnectionRequest()
             # Compute header length based on both sizes
             self.header_length = self.HEADER_SIZE + self.options.size()
 
@@ -69,24 +69,24 @@ class InstantProtocolMessage(object):
             self.header_length = header[3]
             self.options = None
             # Create different options depending on the type of the message
-            if (self.ack == 1): self.options = _Acknowledgement()
-            elif (self.type == _ConnectionRequest.TYPE): self.options = _ConnectionRequest(rawdata=rawdata[self.HEADER_SIZE:])
-            elif (self.type == _ConnectionAccept.TYPE): self.options = _ConnectionAccept(rawdata=rawdata[self.HEADER_SIZE:])
-            elif (self.type == _ConnectionReject.TYPE): self.options = _ConnectionReject(rawdata=rawdata[self.HEADER_SIZE:])
-            elif (self.type == _UserListRequest.TYPE): self.options = _UserListRequest()
-            elif (self.type == _UserListResponse.TYPE): self.options = _UserListResponse(rawdata=rawdata[self.HEADER_SIZE:])
-            elif (self.type == _DataMessage.TYPE): self.options = _DataMessage(rawdata=rawdata[self.HEADER_SIZE:])
-            elif (self.type == _GroupCreationRequest.TYPE): self.options = _GroupCreationRequest(rawdata=rawdata[self.HEADER_SIZE:])
-            elif (self.type == _GroupCreationAccept.TYPE): self.options = _GroupCreationAccept(rawdata=rawdata[self.HEADER_SIZE:])
-            elif (self.type == _GroupCreationReject.TYPE): self.options = _GroupCreationReject()
-            elif (self.type == _GroupInvitationRequest.TYPE): self.options = _GroupInvitationRequest(rawdata=rawdata[self.HEADER_SIZE:])
-            elif (self.type == _GroupInvitationAccept.TYPE): self.options = _GroupInvitationAccept(rawdata=rawdata[self.HEADER_SIZE:])
-            elif (self.type == _GroupInvitationReject.TYPE): self.options = _GroupInvitationReject(rawdata=rawdata[self.HEADER_SIZE:])
-            elif (self.type == _GroupDisjointRequest.TYPE): self.options = _GroupDisjointRequest()
-            elif (self.type == _GroupDissolution.TYPE): self.options = _GroupDissolution()
-            elif (self.type == _UpdateList.TYPE): self.options = _UpdateList(rawdata=rawdata[self.HEADER_SIZE:])
-            elif (self.type == _UpdateDisconnection.TYPE): self.options = _UpdateDisconnection(rawdata=rawdata[self.HEADER_SIZE:])
-            elif (self.type == _DisconnectionRequest.TYPE): self.options = _DisconnectionRequest()
+            if (self.ack == 1): self.options = Acknowledgement()
+            elif (self.type == ConnectionRequest.TYPE): self.options = ConnectionRequest(rawdata=rawdata[self.HEADER_SIZE:])
+            elif (self.type == ConnectionAccept.TYPE): self.options = ConnectionAccept(rawdata=rawdata[self.HEADER_SIZE:])
+            elif (self.type == ConnectionReject.TYPE): self.options = ConnectionReject(rawdata=rawdata[self.HEADER_SIZE:])
+            elif (self.type == UserListRequest.TYPE): self.options = UserListRequest()
+            elif (self.type == UserListResponse.TYPE): self.options = UserListResponse(rawdata=rawdata[self.HEADER_SIZE:])
+            elif (self.type == DataMessage.TYPE): self.options = DataMessage(rawdata=rawdata[self.HEADER_SIZE:])
+            elif (self.type == GroupCreationRequest.TYPE): self.options = GroupCreationRequest(rawdata=rawdata[self.HEADER_SIZE:])
+            elif (self.type == GroupCreationAccept.TYPE): self.options = GroupCreationAccept(rawdata=rawdata[self.HEADER_SIZE:])
+            elif (self.type == GroupCreationReject.TYPE): self.options = GroupCreationReject()
+            elif (self.type == GroupInvitationRequest.TYPE): self.options = GroupInvitationRequest(rawdata=rawdata[self.HEADER_SIZE:])
+            elif (self.type == GroupInvitationAccept.TYPE): self.options = GroupInvitationAccept(rawdata=rawdata[self.HEADER_SIZE:])
+            elif (self.type == GroupInvitationReject.TYPE): self.options = GroupInvitationReject(rawdata=rawdata[self.HEADER_SIZE:])
+            elif (self.type == GroupDisjointRequest.TYPE): self.options = GroupDisjointRequest()
+            elif (self.type == GroupDissolution.TYPE): self.options = GroupDissolution()
+            elif (self.type == UpdateList.TYPE): self.options = UpdateList(rawdata=rawdata[self.HEADER_SIZE:])
+            elif (self.type == UpdateDisconnection.TYPE): self.options = UpdateDisconnection(rawdata=rawdata[self.HEADER_SIZE:])
+            elif (self.type == DisconnectionRequest.TYPE): self.options = DisconnectionRequest()
 
         else:
             raise(ValueError)
@@ -104,7 +104,7 @@ class InstantProtocolMessage(object):
                 hex(self.type), hex(self.sequence), hex(self.ack), hex(self.source_id), hex(self.group_id), hex(self.header_length), self.options)
 
 # These private objects will handle psudoheaders (also payload when Data Message)
-class _ConnectionRequest(object):
+class ConnectionRequest(object):
     """
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -142,7 +142,7 @@ class _ConnectionRequest(object):
     def __repr__(self):
         return '[username={}]'.format(self.username)
 
-class _ConnectionAccept(object):
+class ConnectionAccept(object):
     """
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -175,7 +175,7 @@ class _ConnectionAccept(object):
     def __repr__(self):
         return '[client_id={}]'.format(self.client_id)
 
-class _ConnectionReject(object):
+class ConnectionReject(object):
     """
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -210,7 +210,7 @@ class _ConnectionReject(object):
     def __repr__(self):
         return '[error={}]'.format(self.error)
 
-class _UserListRequest(object):
+class UserListRequest(object):
     """
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -236,7 +236,7 @@ class _UserListRequest(object):
     def __repr__(self):
         return '[]'.format()
 
-class _UserListResponse(object):
+class UserListResponse(object):
     """
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -290,7 +290,7 @@ class _UserListResponse(object):
     def __repr__(self):
         return '[user_list=[{}]]'.format(self.user_list)
 
-class _DataMessage(object):
+class DataMessage(object):
     """
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -327,7 +327,7 @@ class _DataMessage(object):
     def __repr__(self):
         return '[data_length={}, payload={}]'.format(self.data_length, self.payload)
 
-class _GroupCreationRequest(object):
+class GroupCreationRequest(object):
     """
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -376,7 +376,7 @@ class _GroupCreationRequest(object):
         client_list = ', '.join(str(client) for client in self.client_ids)
         return '[type={}, client_ids=[{}]]'.format(self.type, client_list)
 
-class _GroupCreationAccept(object):
+class GroupCreationAccept(object):
     """
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -414,7 +414,7 @@ class _GroupCreationAccept(object):
     def __repr__(self):
         return '[type={}, group_id={}]'.format(self.type, self.group_id)
 
-class _GroupCreationReject(object):
+class GroupCreationReject(object):
     """
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -440,7 +440,7 @@ class _GroupCreationReject(object):
     def __repr__(self):
         return '[]'.format()
 
-class _GroupInvitationRequest(object):
+class GroupInvitationRequest(object):
     """
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -480,7 +480,7 @@ class _GroupInvitationRequest(object):
     def __repr__(self):
         return '[type={}, group_id={}, client_id={}]'.format(self.type, self.group_id, self.client_id)
 
-class _GroupInvitationAccept(object):
+class GroupInvitationAccept(object):
     """
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -518,7 +518,7 @@ class _GroupInvitationAccept(object):
     def __repr__(self):
         return '[type={}, group_id={}]'.format(self.type, self.group_id)
 
-class _GroupInvitationReject(object):
+class GroupInvitationReject(object):
     """
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -556,7 +556,7 @@ class _GroupInvitationReject(object):
     def __repr__(self):
         return '[type={}, group_id={}]'.format(self.type, self.group_id)
 
-class _GroupDisjointRequest(object):
+class GroupDisjointRequest(object):
     """
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -582,7 +582,7 @@ class _GroupDisjointRequest(object):
     def __repr__(self):
         return '[]'.format()
 
-class _GroupDissolution(object):
+class GroupDissolution(object):
     """
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -608,7 +608,7 @@ class _GroupDissolution(object):
     def __repr__(self):
         return '[]'.format()
 
-class _UpdateList(object):
+class UpdateList(object):
     """
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -660,7 +660,7 @@ class _UpdateList(object):
     def __repr__(self):
         return '[user_list=[{}]]'.format(self.user_list)
 
-class _UpdateDisconnection(object):
+class UpdateDisconnection(object):
     """
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -693,7 +693,7 @@ class _UpdateDisconnection(object):
     def __repr__(self):
         return '[client_id={}]'.format(self.client_id)
 
-class _DisconnectionRequest(object):
+class DisconnectionRequest(object):
     """
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -719,7 +719,7 @@ class _DisconnectionRequest(object):
     def __repr__(self):
         return '[]'.format()
 
-class _Acknowledgement(object):
+class Acknowledgement(object):
     """
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1

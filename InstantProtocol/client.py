@@ -42,7 +42,7 @@ class Client(object):
         while True:
             self.username = raw_input('Choose a username: ')
             conn_req = InstantProtocolMessage(
-                dictdata={'type': _ConnectionRequest.TYPE, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'username': self.username}})
+                dictdata={'type': ConnectionRequest.TYPE, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'username': self.username}})
 
             log.debug(conn_req)
             # Send request and wait for response (blocking)
@@ -51,13 +51,13 @@ class Client(object):
             message = InstantProtocolMessage(rawdata=data)
             log.debug(message)
 
-            if (message.type == _ConnectionAccept.TYPE):
+            if (message.type == ConnectionAccept.TYPE):
                 self.client_id = message.options.client_id
                 log.info('System: Logged in as {}'.format(self.username))
-                ack_connection = InstantProtocolMessage(dictdata={'type': _ConnectionAccept.TYPE, 'sequence':0, 'ack':1, 'source_id': self.client_id, 'group_id': self.group_id})
+                ack_connection = InstantProtocolMessage(dictdata={'type': ConnectionAccept.TYPE, 'sequence':1, 'ack':1, 'source_id': self.client_id, 'group_id': self.group_id})
                 self.sock.sendto(ack_connection.serialize(), self.server_address)
                 break # successful! -> out of the loop!
-            elif (message.type == _ConnectionReject.TYPE):
+            elif (message.type == ConnectionReject.TYPE):
                 if (message.options.error == 0):
                     print('Error: Maximum number of user reached')
                 else:
@@ -67,14 +67,14 @@ class Client(object):
 
         #time.sleep(1)
         ## 2. Obtain user list
-        user_list_req = InstantProtocolMessage(dictdata={'type': _UserListRequest.TYPE, 'sequence':0, 'ack':0, 'source_id': self.client_id, 'group_id': self.group_id})
+        user_list_req = InstantProtocolMessage(dictdata={'type': UserListRequest.TYPE, 'sequence':0, 'ack':0, 'source_id': self.client_id, 'group_id': self.group_id})
         self.sock.sendto(user_list_req.serialize(), self.server_address)
 
         data, _ = self.sock.recvfrom(1024)
         message = InstantProtocolMessage(rawdata=data)
         log.debug(message)
         self.user_list = message.options.user_list
-        ack_list = InstantProtocolMessage(dictdata={'type': _UserListResponse.TYPE, 'sequence': message.sequence, 'ack':1, 'source_id': self.client_id, 'group_id': self.group_id})
+        ack_list = InstantProtocolMessage(dictdata={'type': UserListResponse.TYPE, 'sequence': message.sequence, 'ack':1, 'source_id': self.client_id, 'group_id': self.group_id})
         self.sock.sendto(ack_list.serialize(), self.server_address)
         # Connection done and list requested
 
@@ -97,7 +97,7 @@ class Client(object):
                         client_ids = list()
                         [client_ids.append(int(i)) for i in raw_client_ids]
                         log.debug(client_ids)
-                        message_send = InstantProtocolMessage(dictdata={'type': _GroupCreationRequest.TYPE, 'sequence':0, 'ack':0,
+                        message_send = InstantProtocolMessage(dictdata={'type': GroupCreationRequest.TYPE, 'sequence':0, 'ack':0,
                                             'source_id': self.client_id, 'group_id': 0x00, 'options': {'type':group_type, 'client_ids': client_ids}})
                     else:
                         print('Error: Client IDs are required to create a group')
@@ -111,7 +111,7 @@ class Client(object):
                             client_ids = list()
                             [client_ids.append(int(i)) for i in raw_client_ids]
                             print client_ids
-                            message_send = InstantProtocolMessage(dictdata={'type': _GroupInvitationRequest.TYPE, 'sequence':0, 'ack':0,
+                            message_send = InstantProtocolMessage(dictdata={'type': GroupInvitationRequest.TYPE, 'sequence':0, 'ack':0,
                                                 'source_id': self.client_id, 'group_id': 0x00, 'options': {'type': group_type, 'client_ids': client_ids}})
                             log.debug(message_send)
                         else:
@@ -131,7 +131,7 @@ class Client(object):
                     print('Error: Command not found')
 
             else:
-                message_send = InstantProtocolMessage(dictdata={'type': _DataMessage.TYPE, 'sequence':0, 'ack':0,
+                message_send = InstantProtocolMessage(dictdata={'type': DataMessage.TYPE, 'sequence':0, 'ack':0,
                                     'source_id': self.client_id, 'group_id': self.group_id, 'options': {'data_length': len(user_input), 'payload': user_input}})
                 log.debug('User input: {}'.format(user_input))
 
@@ -156,3 +156,10 @@ class Client(object):
 if __name__ == '__main__':
     log.basicConfig(format='%(levelname)s: %(message)s', level=log.DEBUG)
     sys.exit(Client().run())
+
+
+
+
+"""
+
+"""
