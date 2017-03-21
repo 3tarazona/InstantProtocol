@@ -54,11 +54,13 @@ class Server(object):
 
                 elif (message_recv.type == UserListRequest.TYPE):
                     session = self._get_session(message_recv.source_id)
-                    session.user_list_response()
+                    if (session):
+                        session.user_list_response()
 
                 elif (message_recv.type == DataMessage.TYPE):
                     session = self._get_session(message_recv.source_id)
-                    session.data_message(message_recv)
+                    if (session):
+                        session.data_message(message_recv)
 
                 elif (message_recv.type == GroupCreationRequest.TYPE):
                     pass
