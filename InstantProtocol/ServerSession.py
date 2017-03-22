@@ -6,6 +6,7 @@ execfile('InstantProtocol.py')
 
 # Session for each client
 class ServerSession(object):
+    SERVER_ID = 0
     STATE_IDLE = 0 # ready to send
     STATE_ACK = 1 # waiting for ack
     STATE_PENDING_CONN = 2 # client connection
@@ -25,7 +26,7 @@ class ServerSession(object):
         self.timer = None
 
         # Send message to user -> Connection Accepted (and session created for this user)
-        self._send(dictdata={'type': ConnectionAccept.TYPE, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'client_id': self.client_id}})
+        self._send(dictdata={'type': ConnectionAccept.TYPE, 'ack':0, 'source_id': self.SERVER_ID, 'group_id': 0x00, 'options': {'client_id': self.client_id}})
 
     def __repr__(self):
         return 'ServerSession(username={}, client_id={}, group_id={}, group_type={}, last_seq_sent={}, last_seq_recv={}, state={}, message_queue={})'.format(
@@ -37,10 +38,10 @@ class ServerSession(object):
         for user in self.server.session_list:
             item = dict(client_id=user.client_id, group_id=user.group_id, username=user.username, ip_address=user.address[0], port=user.address[1])
             users.append(item)
-        self._send(dictdata={'type': UserListResponse.TYPE, 'ack': 0, 'source_id': self.client_id, 'group_id': self.group_id, 'options': {'user_list': users}})
+        self._send(dictdata={'type': UserListResponse.TYPE, 'ack': 0, 'source_id': self.SERVER_ID, 'group_id': self.group_id, 'options': {'user_list': users}})
 
     def data_message(self, message):
-        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': 0x00, 'group_id': 0x00})
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': 0x00})
         for session in self.server.session_list:
             if ((session.client_id != self.client_id) and (session.group_id == self.group_id)):
                 session._send(dictdata={'type': message.type, 'ack': 0, 'source_id': self.client_id, 'group_id': self.group_id, 'options': {'data_length': message.options.data_length, 'payload': message.options.payload}})
@@ -69,7 +70,7 @@ class ServerSession(object):
 
     def group_dissolution(self):
         log.info('[Group Dissolution] username={}'.format(self.username))
-        self._send(dictdata={'type': GroupDissolution.TYPE, 'ack': 0, 'source_id': 0x00, 'group_id': self.group_id})
+        self._send(dictdata={'type': GroupDissolution.TYPE, 'ack': 0, 'source_id': self.SERVER_ID, 'group_id': self.group_id})
 
     def update_list(self, updated_sessions):
         log.info('[Update List] username={}'.format(self.username))
@@ -77,15 +78,15 @@ class ServerSession(object):
         for us in updated_sessions:
             item = dict(client_id=us.client_id, group_id=us.group_id, username=us.username, ip_address=us.address[0], port=us.address[1])
             users.append(item)
-        self._send(dictdata={'type': UpdateList.TYPE, 'ack': 0, 'source_id': 0x00, 'group_id': 0xFF, 'options': {'user_list': users}})
+        self._send(dictdata={'type': UpdateList.TYPE, 'ack': 0, 'source_id': self.SERVER_ID, 'group_id': 0xFF, 'options': {'user_list': users}})
 
     def update_disconnection(self, old_session):
         log.info('[Update Disconnection] username={}'.format(self.username))
-        self._send(dictdata={'type': UpdateDisconnection.TYPE, 'ack': 0, 'source_id': 0x00, 'group_id': 0xFF, 'options': {'client_id': old_session.client_id}})
+        self._send(dictdata={'type': UpdateDisconnection.TYPE, 'ack': 0, 'source_id': self.SERVER_ID, 'group_id': 0xFF, 'options': {'client_id': old_session.client_id}})
 
     def disconnection_request(self, message):
         log.info('[Disconnection] (Requested by user) username={}, id={}'.format(self.username, self.client_id))
-        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': 0x00, 'group_id': 0x00})
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': 0x00})
         for s in self.server.session_list:
             if (s != self):
                 s.update_disconnection(self)
@@ -102,6 +103,7 @@ class ServerSession(object):
                 log.debug(self.server.session_list)
 
             # Normal behavior
+            log.debug('[ACK] ACK received')
             self.state = self.STATE_IDLE
             self.timer.cancel() # stop timer
             #log.debug('[STATE_ACK] Stop timer -> {}'.format(message))
