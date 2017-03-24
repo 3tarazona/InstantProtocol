@@ -115,7 +115,7 @@ class ClientSessionServer(ClientSession):
             if ((len(raw_clients) > 0) and ((group_type == 0) or (group_type == 1))):
                 client_ids = list()
                 for user in self.client.user_list:
-                    if ((user.username in raw_clients) and (user.username != self.username)):
+                    if ((user.username in raw_clients) and (user.username != self.client.username)):
                         client_ids.append(user.client_id)
                 log.info('[Group Creation] (Request send) group_type={}, client_ids={}'.format(group_type, client_ids))
                 self.client.state = self.client.STATE_WAIT_GROUP
@@ -147,7 +147,7 @@ class ClientSessionServer(ClientSession):
         if (self.client.group_id != self.client.PUBLIC_GROUP_ID): # We can only invite to a private group
             log.info('[Group Invitation] (Resquest send) group_id={}, group_type={}, usernames={}'.format(self.client.group_id, int(self.client.decentralized), usernames))
             for user in self.client.user_list:
-                if ((user.username in usernames) and (user.username != self.username)):
+                if ((user.username in usernames) and (user.username != self.client.username)):
                     self._send(dictdata={'type': GroupInvitationRequest.TYPE, 'ack': 0, 'source_id': self.client.client_id, 'group_id': 0x00, 'options': {'type': int(self.client.decentralized), 'group_id': self.client.group_id, 'client_id': user.client_id}})
         else:
             print('Cannot invite users to public group')
