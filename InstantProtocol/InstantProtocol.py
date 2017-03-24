@@ -1,7 +1,7 @@
 # InstantProtocol.py
 # Copyright (C) 2017
-# Jesus Alberto Polo (jesus.pologarcia@imt-atlantique.net)
-# Erika Tarazona (erika.tarazona@imt-atlantique.net)
+# Jesus Alberto Polo <jesus.pologarcia@imt-atlantique.net>
+# Erika Tarazona <erika.tarazona@imt-atlantique.net>
 
 import struct
 import socket
@@ -339,7 +339,7 @@ class GroupCreationRequest(object):
     """
     TYPE = 0x06
     PSEUDOHEADER_FORMAT_BASE = '>B' # first byte is readed once
-    PSEUDOHEADER_FORMAT_REP = '>B' # repeteated format for each user
+    PSEUDOHEADER_FORMAT_REP = '>B' # repeated format for each user
     PSEUDOHEADER_SIZE_BASE = struct.calcsize(PSEUDOHEADER_FORMAT_BASE)
     PSEUDOHEADER_SIZE_REP = struct.calcsize(PSEUDOHEADER_FORMAT_REP)
 
@@ -458,7 +458,7 @@ class GroupInvitationRequest(object):
         if dictdata:
             self.type = dictdata.get('type')
             self.group_id = dictdata.get('group_id')
-            self.client_id = dic.get('client_id')
+            self.client_id = dictdata.get('client_id')
 
         elif rawdata:
             pseudoheader = struct.unpack(self.PSEUDOHEADER_FORMAT, rawdata)

@@ -1,12 +1,22 @@
+# ServerSession.py
+# Copyright (C) 2017
+# Jesus Alberto Polo <jesus.pologarcia@imt-atlantique.net>
+# Erika Tarazona <erika.tarazona@imt-atlantique.net>
+
 import threading
 import logging as log
 
 # Temporal
 execfile('InstantProtocol.py')
 
+# Exception when a Session is not found
+class SessionNotFound(Exception):
+    pass
+
 # Session for each client
 class ServerSession(object):
     SERVER_ID = 0
+    PUBLIC_GROUP_ID = 0
     STATE_IDLE = 0 # ready to send
     STATE_ACK = 1 # waiting for ack
     STATE_PENDING_CONN = 2 # client connection
@@ -32,8 +42,9 @@ class ServerSession(object):
         return 'ServerSession(username={}, client_id={}, group_id={}, group_type={}, last_seq_sent={}, last_seq_recv={}, state={}, message_queue={})'.format(
             self.username, self.client_id, self.group_id, self.group_type, self.last_seq_sent, self.last_seq_recv, self.state, self.message_queue)
 
-    def user_list_response(self):
+    def user_list_response(self, message):
         log.info('[User List] username={}'.format(self.username))
+        self.last_seq_recv = message.sequence # first message after creating the session (setting last_seq_recv for the first time)
         users = list()
         for user in self.server.session_list:
             item = dict(client_id=user.client_id, group_id=user.group_id, username=user.username, ip_address=user.address[0], port=user.address[1])
@@ -41,14 +52,22 @@ class ServerSession(object):
         self._send(dictdata={'type': UserListResponse.TYPE, 'ack': 0, 'source_id': self.SERVER_ID, 'group_id': self.group_id, 'options': {'user_list': users}})
 
     def data_message(self, message):
+        if (message.sequence != self.last_seq_recv):
+            log.info('[Data message] username={}, payload={}'.format(self.username, message.options.payload))
+            for session in self.server.session_list:
+                if ((session.client_id != self.client_id) and (session.group_id == self.group_id)):
+                    session._send(dictdata={'type': message.type, 'ack': 0, 'source_id': message.source_id, 'group_id': message.group_id, 'options': {'data_length': message.options.data_length, 'payload': message.options.payload}})
         self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': 0x00})
-        for session in self.server.session_list:
-            if ((session.client_id != self.client_id) and (session.group_id == self.group_id)):
-                session._send(dictdata={'type': message.type, 'ack': 0, 'source_id': self.client_id, 'group_id': self.group_id, 'options': {'data_length': message.options.data_length, 'payload': message.options.payload}})
-        log.info('[Data message] username={}, payload={}'.format(self.username, message.options.payload))
 
-    def group_creation_request(self):
-        pass
+    def group_creation_request(self, message):
+        if (message.sequence != self.last_seq_recv):
+            print message.options.client_ids
+            group_id = self.server.pool_group_ids.pop(0)
+            log.info('[Group Creation Request] username={}, group_id={}, client_ids={}'.format(self.username, group_id, message.options.client_ids))
+            for session in self.server.session_list:
+                if (session.client_id in message.options.client_ids):
+                    session._send(dictdata={'type': GroupInvitationRequest.TYPE, 'ack': 0, 'source_id': message.source_id, 'group_id': message.group_id, 'options': {'type': message.options.type, 'group_id': group_id, 'client_id': session.client_id}})
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': 0x00})
 
     def group_creation_accept(self):
         pass
@@ -56,17 +75,36 @@ class ServerSession(object):
     def group_creation_reject(self):
         pass
 
-    def group_invitation_request(self):
+    def group_invitation_request(self, message):
+        for session in self.server.session_list:
+            if (session.client_id == message.options.client_id):
+                session._send(dictdata={'type': GroupInvitationRequest.TYPE, 'ack': 0, 'source_id': message.source_id, 'group_id': message.group_id, 'options': {'type': message.options.type, 'group_id': self.group_id, 'client_id': session.client_id}})
+                break # only one user
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': 0x00})
+
+    def group_invitation_accept(self, message):
+        if (message.sequence != self.last_seq_recv):
+            log.info('[Invitation Accept] username={}, group_id={}'.format(self.username, message.options.group_id))
+            self.group_id = message.options.group_id
+            self.group_type = message.options.type
+            for session in self.server.session_list:
+                if (session != self):
+                    session.update_list([self])
+            self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': 0x00})
+
+    def group_invitation_reject(self, message):
         pass
 
-    def group_invitation_accept(self):
-        pass
-
-    def group_invitation_reject(self):
-        pass
-
-    def group_disjoint_request(self):
-        pass
+    def group_disjoint_request(self, message):
+        if (message.sequence != self.last_seq_recv):
+            log.info('[Disjoint Request] username={}'.format(self.username))
+            self.group_id = self.PUBLIC_GROUP_ID
+            self.group_type = 0
+            self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': 0x00})
+            # Send update to all users
+            for session in self.server.session_list:
+                if (session != self):
+                    session.update_list([self])
 
     def group_dissolution(self):
         log.info('[Group Dissolution] username={}'.format(self.username))
@@ -81,24 +119,26 @@ class ServerSession(object):
         self._send(dictdata={'type': UpdateList.TYPE, 'ack': 0, 'source_id': self.SERVER_ID, 'group_id': 0xFF, 'options': {'user_list': users}})
 
     def update_disconnection(self, old_session):
-        log.info('[Update Disconnection] username={}'.format(self.username))
+        log.info('[Update Disconnection] username={}'.format(old_session.username))
         self._send(dictdata={'type': UpdateDisconnection.TYPE, 'ack': 0, 'source_id': self.SERVER_ID, 'group_id': 0xFF, 'options': {'client_id': old_session.client_id}})
 
     def disconnection_request(self, message):
-        log.info('[Disconnection] (Requested by user) username={}, id={}'.format(self.username, self.client_id))
-        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': 0x00})
-        for s in self.server.session_list:
-            if (s != self):
-                s.update_disconnection(self)
-        self.server.session_list.remove(self) # remove itself from the list
+        if (message.sequence != self.last_seq_recv):
+            log.info('[Disconnection] (Requested by user) username={}, id={}'.format(self.username, self.client_id))
+            self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': 0x00})
+            # Send update to all users
+            for session in self.server.session_list:
+                if (session != self):
+                    session.update_disconnection(self)
+            self.server.session_list.remove(self) # remove itself from the list
 
     def acknowledgement(self, message):
         #log.debug(self.server.session_list)
         if (message.sequence == self.last_seq_sent): # it can be for connection or any other message
             if (self.state == self.STATE_PENDING_CONN): # Session is created now and all other clients are notified
-                for s in self.server.session_list:
-                    if (s != self):
-                        s.update_list([self])
+                for session in self.server.session_list:
+                    if (session != self):
+                        session.update_list([self])
                 log.info('[Connection] username={}, id={}'.format(self.username, self.client_id))
                 log.debug(self.server.session_list)
 
@@ -114,6 +154,7 @@ class ServerSession(object):
     def _send(self, dictdata, retry=1):
         # When ACK not UDP reliability
         if (dictdata.get('ack') == 0x01):
+            self.last_seq_recv = dictdata.get('sequence') # if we send an ACK, we are acknowledging the last sequence
             message = InstantProtocolMessage(dictdata=dictdata)
             log.debug('[---] Sending ACK -> {}'.format(message))
             self.server.sock.sendto(message.serialize(), self.address)
