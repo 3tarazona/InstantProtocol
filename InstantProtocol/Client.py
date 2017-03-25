@@ -81,7 +81,15 @@ class Client(object):
                         log.debug(message_recv)
 
                         if (message_recv.ack == Acknowledgement.FLAG): # ACK
-                            self._get_session(message_recv.source_id).acknowledgement(message_recv)
+                            if (message_recv.source_id == self.SERVER_ID):
+                                self.server_session.acknowledgement(message_recv)
+                            else:
+                                # Look for session in decentralized mode
+                                for session in self.user_sessions:
+                                    if (session.client_id == message_recv.source_id):
+                                        print session
+                                        session.acknowledgement(message_recv)
+                                        break
                         elif (message_recv.type == ConnectionAccept.TYPE): # if ACK after ConnectionAccept has been lost
                             self.server_session.connection_accept(message)
                         elif (message_recv.type == UserListResponse.TYPE):
@@ -164,16 +172,6 @@ class Client(object):
         if (self.state == self.STATE_DISCONNECTED):
             log.info('Closing client...')
             self.sock.close()
-
-    def _get_session(self, source_id):
-        if (source_id == self.SERVER_ID):
-            return self.server_session
-        else:
-            for session in self.user_sessions:
-                if (session.client_id == source_id):
-                    return session
-        # Raise exception if not returned value
-        raise SessionNotFound
 
 # Execution
 if __name__ == '__main__':

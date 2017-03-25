@@ -130,7 +130,6 @@ class ClientSessionServer(ClientSession):
             else:
                 print('Cannot create group from the given arguments')
 
-    #TODO: Sessions in decentralized mode will be created based on UpdateList messages
     def group_creation_accept(self, message):
         if (message.sequence != self.last_seq_recv):
             if (self.client.state == self.client.STATE_WAIT_GROUP):
@@ -138,7 +137,6 @@ class ClientSessionServer(ClientSession):
                 self.client.state = self.client.STATE_NORMAL
                 self.client.group_id = message.options.group_id
                 self.client.decentralized = bool(message.options.type)
-                print('[--------------------]decentralized {}'.format(self.client.decentralized))
                 # Sessions in decentralized mode will be created based on UpdateList messages
                 print('\033[1mGroup creation accepted: Changing to group {} in {} mode\033[0m'.format(self.client.group_id, 'centralized' if (not self.client.decentralized) else 'decentralized'))
         self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
@@ -186,6 +184,7 @@ class ClientSessionServer(ClientSession):
             print('\033[1mInvitation accepted: Changing to group {} in {} mode\033[0m'.format(self.client.group_id, 'centralized' if (not self.temporal_group_type) else 'decentralized'))
             # Create sessions in decentralized mode
             if (self.client.decentralized):
+                self.client.user_sessions = list() # empty list
                 for user in self.client.user_list:
                     if ((user.group_id == self.client.group_id) and (user.client_id != self.client.client_id)):
                         log.debug('[Group Invitation Accept] (Session created in decentralized) username={}'.format(user.username))
@@ -193,6 +192,7 @@ class ClientSessionServer(ClientSession):
 
     def group_invitation_accept_reception(self, message):
         if (message.sequence != self.last_seq_recv):
+            # Changes in UpdateList
             log.info('[Group Invitation] (Accept receive) client_id={}'.format(message.client_id))
         self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
@@ -218,6 +218,7 @@ class ClientSessionServer(ClientSession):
             log.info('[Group Disjoint] (Requested)')
             self.client.group_id = self.client.PUBLIC_GROUP_ID
             self.client.decentralized = False # centralized by default
+            self.client.user_sessions = list() # empty list
             self._send(dictdata={'type': GroupDisjointRequest.TYPE, 'ack':0, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
         else:
             print('Cannot disjoint from Public Group')
@@ -237,14 +238,21 @@ class ClientSessionServer(ClientSession):
                 found = False
                 for old_user in self.client.user_list:
                     if (old_user.client_id == new_user['client_id']):
+                        if ((self.client.decentralized) and (old_user.group_id == self.client.group_id)):
+                            for session in self.client.user_sessions:
+                                if (session.client_id == old_user.client_id):
+                                    self.client.user_sessions.remove(session)
                         old_user.group_id = new_user['group_id'] # in this protocol, only group_id can change (other values are fixed)
+                        if (new_user['group_id'] == self.client.group_id):
+                            self.client.user_sessions.append(ClientSessionClient(self.client, new_user['username'], new_user['client_id'], (new_user['ip_address'], new_user['port'])))
                         found = True
+                        break
                 if (not found):
                     self.client.user_list.append(ClientInfo(new_user['username'], new_user['client_id'], new_user['group_id'], (new_user['ip_address'], new_user['port'])))
-                if (self.client.decentralized): # Create sessions if decentralized mode
-                    if (new_user['group_id'] == self.client.group_id):
-                        log.debug('[Update List] (Session created in decentralized) username={}'.format(new_user['username']))
+                    if (self.client.decentralized): # we add him to our session list
+                        print 'add use rto list'
                         self.client.user_sessions.append(ClientSessionClient(self.client, new_user['username'], new_user['client_id'], (new_user['ip_address'], new_user['port'])))
+
             log.info('[Update List] list={}'.format(self.client.user_list))
         self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
