@@ -17,7 +17,7 @@ execfile('SocketError.py')
 execfile('ServerSession.py')
 
 class Server(object):
-    def __init__(self, address=('localhost', 1313), buffer=socket.SO_RCVBUF, loss_rate=5):
+    def __init__(self, address=('localhost', 1313), buffer=1024, loss_rate=5):
         self.address = address
         self.pool_client_ids = random.sample(xrange(1, 256), 255) # random client ids
         self.pool_group_ids = random.sample(xrange(2, 256), 254) # random group ids
