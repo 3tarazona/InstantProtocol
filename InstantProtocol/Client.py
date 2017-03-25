@@ -81,7 +81,7 @@ class Client(object):
                         log.debug(message_recv)
 
                         if (message_recv.ack == Acknowledgement.FLAG): # ACK
-                            self.server_session.acknowledgement(message_recv)
+                            self._get_session(message_recv.source_id).acknowledgement(message_recv)
                         elif (message_recv.type == ConnectionAccept.TYPE): # if ACK after ConnectionAccept has been lost
                             self.server_session.connection_accept(message)
                         elif (message_recv.type == UserListResponse.TYPE):
@@ -104,9 +104,9 @@ class Client(object):
                         elif (message_recv.type == GroupInvitationAccept.TYPE):
                             self.server_session.group_invitation_accept(message_recv)
                         elif (message_recv.type == GroupInvitationReject.TYPE):
-                            self.server_session.group_invitation_reject(message_recv)
+                            self.server_session.group_invitation_reject_reception(message_recv)
                         elif (message_recv.type == GroupDissolution.TYPE):
-                            pass
+                            self.server_session.group_dissolution(message_recv)
                         elif (message_recv.type == UpdateList.TYPE):
                             self.server_session.update_list(message_recv)
                         elif (message_recv.type == UpdateDisconnection.TYPE):
@@ -137,6 +137,9 @@ class Client(object):
                             elif (arguments[0] == '/invite_group'):
                                 self.server_session.group_invitation_request_send(arguments[1:])
 
+                            elif (arguments[0] == '/disjoint'):
+                                self.server_session.group_disjoint_request()
+
                             elif (arguments[0] == '/exit'):
                                 self.server_session.disconnection_request()
                         else:
@@ -145,7 +148,8 @@ class Client(object):
                                 if (not self.decentralized):
                                     self.server_session.data_message_send(user_input)
                                 else:
-                                    pass
+                                    for user in self.user_sessions:
+                                        user.data_message_send(user_input)
 
             except KeyboardInterrupt: # Ctrl + C
                 # Sending message to server asking for disconnection and wait for ACK as usual
@@ -160,6 +164,16 @@ class Client(object):
         if (self.state == self.STATE_DISCONNECTED):
             log.info('Closing client...')
             self.sock.close()
+
+    def _get_session(self, source_id):
+        if (source_id == self.SERVER_ID):
+            return self.server_session
+        else:
+            for session in self.user_sessions:
+                if (session.client_id == source_id):
+                    return session
+        # Raise exception if not returned value
+        raise SessionNotFound
 
 # Execution
 if __name__ == '__main__':

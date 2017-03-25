@@ -569,7 +569,7 @@ class GroupDisjointRequest(object):
         pass
 
     def size(self):
-        return self.PSEUDOHEADER_SIZE
+        return self.PSEUDOHEADER_SIZE # 0
 
     def serialize(self):
         return struct.pack(self.PSEUDOHEADER_FORMAT)
@@ -595,7 +595,7 @@ class GroupDissolution(object):
         pass
 
     def size(self):
-        return self.PSEUDOHEADER_SIZE
+        return self.PSEUDOHEADER_SIZE # 0
 
     def serialize(self):
         return struct.pack(self.PSEUDOHEADER_FORMAT)

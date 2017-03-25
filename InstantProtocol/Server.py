@@ -94,9 +94,9 @@ class Server(object):
                 log.error('Session not found, message coming from unexpected source')
 
     def _get_session(self, source_id):
-        for s in self.session_list:
-            if (s.client_id == source_id):
-                return s
+        for session in self.session_list:
+            if (session.client_id == source_id):
+                return session
         # Raise exception if not returned value
         raise SessionNotFound
 
