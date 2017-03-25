@@ -1,3 +1,8 @@
+# Client.py
+# Copyright (C) 2017
+# Jesus Alberto Polo <jesus.pologarcia@imt-atlantique.net>
+# Erika Tarazona <erika.tarazona@imt-atlantique.net>
+
 import socket
 import sys
 import os
@@ -11,103 +16,140 @@ execfile('ClientSession.py')
 
 class Client(object):
     SERVER_ID = 0x00
+    PUBLIC_GROUP_ID = 0x01
+    STATE_NORMAL = 0
+    STATE_PENDING_CONN = 1
+    STATE_PENDING_DISC = 2
+    STATE_WAIT_GROUP = 3 # Group Creation
+    STATE_PENDING_INV = 4 # Group Invitation
+    STATE_DISJOINT = 5
+    STATE_DISCONNECTED = 6
 
     def __init__(self, server_address=('localhost', 1313), buffer=socket.SO_RCVBUF):
-        self.connected = False
         self.server_address = server_address
         self.username = None # asked later
         self.client_id = 0 # changed later
         self.group_id = 1 # public by default
-        self.group_type = 0 # centralized by default (centralized = 0, decentralized = 1)
-        self.user_list = None
-        self.server_session = ClientSession(self, 'server', self.SERVER_ID, server_address)
-        self.users_sessions = None # it stores others' sessions in decentralized mode
+        self.decentralized = False # centralized by default
+        self.state = self.STATE_PENDING_CONN
+        self.user_list = list() # it stores all users' information (ClientInfo) -> small database
+        self.server_session = ClientSessionServer(self, server_address)
+        self.user_sessions = list() # it stores others' sessions in decentralized mode
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
         self.inputs = [ self.sock, sys.stdin ] # (inputs of select) socket reception and user input
         self.buffer = buffer
 
     # Execute chat
     def run(self):
-        try:
-            # 1. Connection (Set username and get unique Client ID from server)
-            while True:
+        # 1. Connection (Set username and get unique Client ID from server)
+        while (self.state == self.STATE_PENDING_CONN):
+            try:
                 username = raw_input('Choose a username: ')
+                if (not username):
+                    continue
                 self.server_session.connection_request(username)
-                data, _ = self.sock.recvfrom(self.buffer)
-                message = InstantProtocolMessage(rawdata=data)
+                # readable used because of its timer (otherwise it doesn't make sense for one UDP socket)
+                readable, _, _ = select.select([self.sock], [], [], 1) # wait 1 second
+                if (not readable):
+                    print('Server unreachable')
+                    sys.exit(1) # error
+                else:
+                    data, _ = self.sock.recvfrom(self.buffer)
+                    message = InstantProtocolMessage(rawdata=data)
+                    if (message.type == ConnectionAccept.TYPE):
+                        self.server_session.connection_accept(message) # connection accepted
+                        self.server_session.user_list_request() # ask for user list
+                        break
+                    elif (message.type == ConnectionReject.TYPE):
+                        self.server_session.connection_reject(message)
+            except KeyboardInterrupt: # Ctrl + C
+                sys.exit(0)
 
-                if (message.type == ConnectionAccept.TYPE):
-                    self.server_session.connection_accept(message) # connection accepted
-                    self.server_session.user_list_request() # ask for user list
-                    break
-                elif (message.type == ConnectionReject.TYPE):
-                    self.server_session.connection_reject(message)
-
-            # 2. Main state
-            while True:
+        # 2. Chat & Group Management (general)
+        while (self.state != self.STATE_DISCONNECTED): # when DisconnectionRequest ACK is received -> connected = False
+            try:
                 readable, _, _ = select.select(self.inputs, [], [])
+                # Check again if the state is disconnected because we can stay locked inside the select function and a thread changes the state (in other context)
+                if (self.state == self.STATE_DISCONNECTED):
+                    break
+                # Check the source and make decisions
                 for source in readable:
+                    # Reception (from socket)
                     if (source == self.sock):
                         data, _ = self.sock.recvfrom(self.buffer)
-                        message = InstantProtocolMessage(rawdata=data)
-                        if (message.type == UserListResponse.TYPE): self.server_session.user_list_response(message)
-                        #elif (message.type == DataMessage.TYPE): self.ser
-                        elif (message.type == UpdateList.TYPE): self.server_session.update_list(message)
-                        elif (message.type == UpdateDisconnection.TYPE): self.server_session.update_disconnection(message)
+                        message_recv = InstantProtocolMessage(rawdata=data)
+                        log.debug(message_recv)
 
-                        log.debug(message)
-                        #print 'Message received: {}'.format(message.options.payload)
+                        if (message_recv.ack == Acknowledgement.FLAG): # ACK
+                            self.server_session.acknowledgement(message_recv)
+                        elif (message_recv.type == ConnectionAccept.TYPE): # if ACK after ConnectionAccept has been lost
+                            self.server_session.connection_accept(message)
+                        elif (message_recv.type == UserListResponse.TYPE):
+                            self.server_session.user_list_response(message_recv)
+                        elif (message_recv.type == DataMessage.TYPE):
+                            if (not self.decentralized):
+                                self.server_session.data_message_reception(message_recv)
+                            else:
+                                # Look for session in decentralized mode
+                                for session in self.user_sessions:
+                                    if (session.client_id == message_recv.source_id):
+                                        session.data_message_reception(message_recv)
+                                        break
+                        elif (message_recv.type == GroupInvitationRequest.TYPE):
+                            self.server_session.group_invitation_request_reception(message_recv)
+                        elif (message_recv.type == UpdateList.TYPE):
+                            self.server_session.update_list(message_recv)
+                        elif (message_recv.type == UpdateDisconnection.TYPE):
+                            self.server_session.update_disconnection(message_recv)
+
+                        if (self.state == self.STATE_PENDING_INV):
+                            print('\033[1mDo you want to join the {} group {}\033[0m? (yes or no)'.format(
+                                'centralized' if (not self.server_session.temporal_group_type) else 'decentralized', self.server_session.temporal_group_id))
+
+                    # Sending (from user's input)
                     elif (source == sys.stdin):
-                        user_input = sys.stdin.readline()
-                        # If input starts with '/' means that it's a command
+                        user_input = sys.stdin.readline().rstrip('\n') # read line and remove '\n'
+                        # When invitation, we wait for user answer
+                        if (self.state == self.STATE_PENDING_INV):
+                            if (user_input == 'yes' or user_input == 'Y'):
+                                self.server_session.group_invitation_accept_send()
+                            elif (user_input == 'no' or user_input == 'N'):
+                                self.server_session.group_invitation_reject_send()
+                            continue
+                        # If input starts with '/' -> it's a command
                         if (user_input.startswith('/')):
                             arguments = user_input.split(' ')
                             if (arguments[0] == '/create_group'):
-                                group_type = arguments[1]
-                                raw_client_ids = arguments[2:]
-                                if (raw_client_ids > 0):
-                                    client_ids = list()
-                                    [client_ids.append(int(i)) for i in raw_client_ids]
-                                    log.debug(client_ids)
-                                    message_send = InstantProtocolMessage(dictdata={'type': GroupCreationRequest.TYPE, 'sequence':0, 'ack':0,
-                                                        'source_id': self.client_id, 'group_id': 0x00, 'options': {'type':group_type, 'client_ids': client_ids}})
-                                else:
-                                    print('Error: Client IDs are required to create a group')
+                                # '/create_group 0 erika jesus' (<command> <type> [<client usernames>])
+                                group_type = int(arguments[1])
+                                self.server_session.group_creation_request(group_type, arguments[2:])
 
-                            # TODO... Problem
                             elif (arguments[0] == '/invite_group'):
-                                if (self.group_id > 0):
-                                    group_type = arguments[1]
-                                    raw_client_ids = arguments[2:]
-                                    if (raw_client_ids > 0):
-                                        client_ids = list()
-                                        [client_ids.append(int(i)) for i in raw_client_ids]
-                                        print client_ids
-                                        message_send = InstantProtocolMessage(dictdata={'type': GroupInvitationRequest.TYPE, 'sequence':0, 'ack':0,
-                                                            'source_id': self.client_id, 'group_id': 0x00, 'options': {'type': group_type, 'client_ids': client_ids}})
-                                        log.debug(message_send)
-                                    else:
-                                        print('Error: Client IDs are required to invite clients to a group')
-
-                                else:
-                                    print('Error: You are not in a private group')
+                                self.server_session.group_invitation_request_send(arguments[1:])
 
                             elif (arguments[0] == '/exit'):
-                                message_send = InstantProtocolMessage(dictdata={'type': DisconnectionRequest.TYPE, 'sequence':0, 'ack':0,
-                                                    'source_id': self.client_id, 'group_id': 0x00})
-                                self.sock.sendto(message_send.serialize(), self.server_address)
-                                data, _ = self.sock.recvfrom(1024)
+                                self.server_session.disconnection_request()
+                        else:
+                            if (user_input): # ignore if user press enter
+                                # Centralized mode
+                                if (not self.decentralized):
+                                    self.server_session.data_message_send(user_input)
+                                else:
+                                    pass
 
-                            else:
-                                # centralized mode
-                                if (self.group_type == 0):
-                                    self.server_session.send()
+            except KeyboardInterrupt: # Ctrl + C
+                # Sending message to server asking for disconnection and wait for ACK as usual
+                if (self.state != self.STATE_PENDING_DISC):
+                    self.server_session.disconnection_request()
+                continue
 
-        except KeyboardInterrupt:
+            except SessionNotFound:
+                log.error('Session not found, message coming from unexpected source')
+                continue
+
+        if (self.state == self.STATE_DISCONNECTED):
             log.info('Closing client...')
-            # send DisconnectionRequest
             self.sock.close()
-            sys.exit(0)
 
 # Execution
 if __name__ == '__main__':

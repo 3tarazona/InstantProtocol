@@ -7,11 +7,6 @@ import struct
 import socket
 import sys
 
-# Custom Exception for unexpected behaviors
-class InstantProtocolException(Exception):
-    def __init__(self, message):
-        super(InstantProtocolException, self).__init__(message)
-
 # Base object -> it will create any message from application or network
 class InstantProtocolMessage(object):
     """
@@ -301,7 +296,7 @@ class DataMessage(object):
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     """
     TYPE = 0x05
-    PSEUDOHEADER_FORMAT = '>H'
+    PSEUDOHEADER_FORMAT = '>H' # Payload is not structured data of this protocol
     PSEUDOHEADER_SIZE = struct.calcsize(PSEUDOHEADER_FORMAT)
     # This message is different because we also save payload (upper layer) because it is the
     # only one which has payload so we save it here for easy coding.
@@ -313,7 +308,7 @@ class DataMessage(object):
 
         elif rawdata:
             self.data_length = struct.unpack(self.PSEUDOHEADER_FORMAT, rawdata[:self.PSEUDOHEADER_SIZE])[0]
-            self.payload = rawdata[self.PSEUDOHEADER_SIZE:]
+            self.payload = rawdata[self.PSEUDOHEADER_SIZE:] # rawdata[self.PSEUDOHEADER_SIZE:(self.PSEUDOHEADER_SIZE + self.data_length)]
 
         else:
             raise(ValueError)
@@ -730,6 +725,7 @@ class Acknowledgement(object):
     +-+-+-+-+-+-+-+-+
     """
     # TYPE = depends on the message which is being acknowledged
+    FLAG = 0x01
     PSEUDOHEADER_FORMAT = ''
     PSEUDOHEADER_SIZE = struct.calcsize(PSEUDOHEADER_FORMAT)
 

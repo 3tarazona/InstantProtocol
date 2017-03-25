@@ -15,12 +15,14 @@ class SessionNotFound(Exception):
 
 # Session for each client
 class ServerSession(object):
-    SERVER_ID = 0
-    PUBLIC_GROUP_ID = 0
+    SERVER_ID = 0x00
+    PUBLIC_GROUP_ID = 0x01
+    NO_GROUP_ID = 0x00 # when group is set to 0 because the destination is not a group
     STATE_IDLE = 0 # ready to send
     STATE_ACK = 1 # waiting for ack
     STATE_PENDING_CONN = 2 # client connection
     RESEND_TIMER = 0.5 # resend in 500ms
+    GROUP_CREATION_TIMER = 15 # timer for Group Creation (sends Group Creation Reject if not stopped)
 
     def __init__(self, server, username, client_id, address):
         self.server = server
@@ -34,9 +36,10 @@ class ServerSession(object):
         self.last_seq_recv = 0
         self.message_queue = list() # saving dictdata so sequence can be changed
         self.timer = None
+        self.group_creation_timer = None
 
         # Send message to user -> Connection Accepted (and session created for this user)
-        self._send(dictdata={'type': ConnectionAccept.TYPE, 'ack':0, 'source_id': self.SERVER_ID, 'group_id': 0x00, 'options': {'client_id': self.client_id}})
+        self._send(dictdata={'type': ConnectionAccept.TYPE, 'ack':0, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID, 'options': {'client_id': self.client_id}})
 
     def __repr__(self):
         return 'ServerSession(username={}, client_id={}, group_id={}, group_type={}, last_seq_sent={}, last_seq_recv={}, state={}, message_queue={})'.format(
@@ -57,7 +60,7 @@ class ServerSession(object):
             for session in self.server.session_list:
                 if ((session.client_id != self.client_id) and (session.group_id == self.group_id)):
                     session._send(dictdata={'type': message.type, 'ack': 0, 'source_id': message.source_id, 'group_id': message.group_id, 'options': {'data_length': message.options.data_length, 'payload': message.options.payload}})
-        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': 0x00})
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID})
 
     def group_creation_request(self, message):
         if (message.sequence != self.last_seq_recv):
@@ -67,20 +70,22 @@ class ServerSession(object):
             for session in self.server.session_list:
                 if (session.client_id in message.options.client_ids):
                     session._send(dictdata={'type': GroupInvitationRequest.TYPE, 'ack': 0, 'source_id': message.source_id, 'group_id': message.group_id, 'options': {'type': message.options.type, 'group_id': group_id, 'client_id': session.client_id}})
-        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': 0x00})
+            # Set a timer and group_creation_reject will be called when it expires
+            self.group_creation_timer = threading.Timer(self.GROUP_CREATION_TIMER, self.group_creation_reject, [])
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID})
 
     def group_creation_accept(self):
         pass
 
     def group_creation_reject(self):
-        pass
+        self._send(dictdata={'type': GroupCreationReject.TYPE, 'ack':0, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID})
 
     def group_invitation_request(self, message):
         for session in self.server.session_list:
             if (session.client_id == message.options.client_id):
                 session._send(dictdata={'type': GroupInvitationRequest.TYPE, 'ack': 0, 'source_id': message.source_id, 'group_id': message.group_id, 'options': {'type': message.options.type, 'group_id': self.group_id, 'client_id': session.client_id}})
                 break # only one user
-        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': 0x00})
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID})
 
     def group_invitation_accept(self, message):
         if (message.sequence != self.last_seq_recv):
@@ -90,17 +95,19 @@ class ServerSession(object):
             for session in self.server.session_list:
                 if (session != self):
                     session.update_list([self])
-            self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': 0x00})
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID})
 
     def group_invitation_reject(self, message):
-        pass
+        if (message.sequence != self.last_seq_recv):
+            pass
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID})
 
     def group_disjoint_request(self, message):
         if (message.sequence != self.last_seq_recv):
             log.info('[Disjoint Request] username={}'.format(self.username))
             self.group_id = self.PUBLIC_GROUP_ID
             self.group_type = 0
-            self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': 0x00})
+            self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID})
             # Send update to all users
             for session in self.server.session_list:
                 if (session != self):
@@ -125,7 +132,7 @@ class ServerSession(object):
     def disconnection_request(self, message):
         if (message.sequence != self.last_seq_recv):
             log.info('[Disconnection] (Requested by user) username={}, id={}'.format(self.username, self.client_id))
-            self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': 0x00})
+            self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID})
             # Send update to all users
             for session in self.server.session_list:
                 if (session != self):
@@ -190,7 +197,6 @@ class ServerSession(object):
                 for s in self.server.session_list:
                     if (s != self):
                         s.update_disconnection(self)
-            else:
-                log.info('[Disconnection] (Timer expired) username={}, id={}'.format(self.username, self.client_id))
-
+            log.info('[Disconnection] (Timer expired) username={}, id={}'.format(self.username, self.client_id))
             self.server.session_list.remove(self) # remove itself from the list
+            print self.server.session_list
