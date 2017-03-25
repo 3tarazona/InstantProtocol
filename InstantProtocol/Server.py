@@ -25,9 +25,8 @@ class Server(object):
         self.sock = SocketError(socket.AF_INET, socket.SOCK_DGRAM, loss_rate) # UDP
         self.sock.bind(address)
         self.buffer = buffer
-        ## Run
-        #self.run()
 
+    # Main functionality
     def run(self):
         while True:
             try:

@@ -95,8 +95,18 @@ class Client(object):
                                     if (session.client_id == message_recv.source_id):
                                         session.data_message_reception(message_recv)
                                         break
+                        elif (message_recv.type == GroupCreationAccept.TYPE):
+                            self.server_session.group_creation_accept(message_recv)
+                        elif (message_recv.type == GroupCreationReject.TYPE):
+                            self.server_session.group_creation_reject(message_recv)
                         elif (message_recv.type == GroupInvitationRequest.TYPE):
                             self.server_session.group_invitation_request_reception(message_recv)
+                        elif (message_recv.type == GroupInvitationAccept.TYPE):
+                            self.server_session.group_invitation_accept(message_recv)
+                        elif (message_recv.type == GroupInvitationReject.TYPE):
+                            self.server_session.group_invitation_reject(message_recv)
+                        elif (message_recv.type == GroupDissolution.TYPE):
+                            pass
                         elif (message_recv.type == UpdateList.TYPE):
                             self.server_session.update_list(message_recv)
                         elif (message_recv.type == UpdateDisconnection.TYPE):

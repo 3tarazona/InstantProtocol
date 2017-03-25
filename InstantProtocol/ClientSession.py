@@ -23,6 +23,7 @@ class SessionNotFound(Exception):
 
 # Base object for session used for server (always) and other clients (decentralized mode)
 class ClientSession(object):
+    NO_GROUP_ID = 0x00
     STATE_IDLE = 0 # ready to send
     STATE_ACK = 1 # waiting for ack
     RESEND_TIMER = 0.5 # resend in 500ms
@@ -60,7 +61,7 @@ class ClientSessionServer(ClientSession):
         if (self.client.state == self.client.STATE_PENDING_CONN):
             self.client.username = ('{0: <8}'.format(username)).strip() # only 8 bytes
             log.info('[Connection Request] username={}'.format(username))
-            self._send(dictdata={'type': ConnectionRequest.TYPE, 'ack': 0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'username': username}})
+            self._send(dictdata={'type': ConnectionRequest.TYPE, 'ack': 0, 'source_id': 0x00, 'group_id': self.NO_GROUP_ID, 'options': {'username': username}})
 
     # only for server (id = 0x00)
     def connection_accept(self, message):
@@ -70,7 +71,7 @@ class ClientSessionServer(ClientSession):
             self.timer.cancel() # stop timer
             self.state = self.STATE_IDLE
             log.info('[Connection] username={}, id={}'.format(self.client.username, self.client.client_id))
-            self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': 0x00})
+            self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     # only for server (id = 0x00)
     def connection_reject(self, message):
@@ -85,7 +86,7 @@ class ClientSessionServer(ClientSession):
                 print('Connection failed -> username already taken')
             else:
                 print('Connection failed')
-        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': 0x00})
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     def user_list_request(self):
         log.info('[User List Request] username={}'.format(self.client.username))
@@ -99,7 +100,7 @@ class ClientSessionServer(ClientSession):
             for user in message.options.user_list:
                 self.client.user_list.append(ClientInfo(user['username'], user['client_id'], user['group_id'], (user['ip_address'], user['port'])))
             log.info('[User List Response] list={}'.format(self.client.user_list))
-        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': 0x00})
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     def data_message_send(self, text):
         log.info('[Data Message] (Send message) text={}'.format(text))
@@ -113,7 +114,7 @@ class ClientSessionServer(ClientSession):
                 if (user.client_id == message.source_id):
                     print('\033[1m{}:\033[0m {}'.format(user.username, message.options.payload))
                     break
-        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': 0x00})
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     def group_creation_request(self, group_type, raw_clients):
         # Create Group only when client is in Public Group
@@ -125,10 +126,11 @@ class ClientSessionServer(ClientSession):
                         client_ids.append(user.client_id)
                 log.info('[Group Creation] (Request send) group_type={}, client_ids={}'.format(group_type, client_ids))
                 self.client.state = self.client.STATE_WAIT_GROUP
-                self._send(dictdata={'type': GroupCreationRequest.TYPE, 'ack': 0, 'source_id': self.client.client_id, 'group_id': 0x00, 'options': {'type': group_type, 'client_ids': client_ids}})
+                self._send(dictdata={'type': GroupCreationRequest.TYPE, 'ack': 0, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID, 'options': {'type': group_type, 'client_ids': client_ids}})
             else:
                 print('Cannot create group from the given arguments')
 
+    #TODO: Sessions in decentralized mode will be created based on UpdateList messages
     def group_creation_accept(self, message):
         if (message.sequence != self.last_seq_recv):
             if (self.client.state == self.client.STATE_WAIT_GROUP):
@@ -137,21 +139,22 @@ class ClientSessionServer(ClientSession):
                 self.client.group_id = message.options.group_id
                 self.client.decentralized = bool(message.options.type)
                 # Sessions in decentralized mode will be created based on UpdateList messages
-        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': 0x00})
+                print('\033[1mGroup creation accepted: Changing to group {} in mode {}\033[0m'.format(self.client.group_id, 'centralized' if (not self.server_session.temporal_group_type) else 'decentralized'))
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     def group_creation_reject(self, message):
         if (message.sequence != self.last_seq_recv):
             if (self.client.state == self.client.STATE_WAIT_GROUP):
                 log.info('[Group Creation] (Reject receive) group_type={}, group_id={}'.format(message.options.type, message.options.group_id))
                 self.client.state = self.client.STATE_NORMAL
-                print('Group creation rejected')
+                print('\033[1mGroup creation rejected\033[0m')
 
     def group_invitation_request_send(self, usernames):
         if (self.client.group_id != self.client.PUBLIC_GROUP_ID): # We can only invite to a private group
             log.info('[Group Invitation] (Resquest send) group_id={}, group_type={}, usernames={}'.format(self.client.group_id, int(self.client.decentralized), usernames))
             for user in self.client.user_list:
                 if ((user.username in usernames) and (user.username != self.client.username)):
-                    self._send(dictdata={'type': GroupInvitationRequest.TYPE, 'ack': 0, 'source_id': self.client.client_id, 'group_id': 0x00, 'options': {'type': int(self.client.decentralized), 'group_id': self.client.group_id, 'client_id': user.client_id}})
+                    self._send(dictdata={'type': GroupInvitationRequest.TYPE, 'ack': 0, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID, 'options': {'type': int(self.client.decentralized), 'group_id': self.client.group_id, 'client_id': user.client_id}})
         else:
             print('Cannot invite users to public group')
 
@@ -166,8 +169,8 @@ class ClientSessionServer(ClientSession):
                 self.invitation_timer = threading.Timer(self.INVITATION_TIMER, self._invitation_expired)
                 self.invitation_timer.start()
             else:
-                self._send(dictdata={'type': GroupInvitationReject.TYPE, 'ack': 0, 'source_id': self.client.client_id, 'group_id': 0x00, 'options': {'type': message.options.type, 'group_id': message.options.group_id, 'client_id': message.options.client_id}})
-        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': 0x00})
+                self._send(dictdata={'type': GroupInvitationReject.TYPE, 'ack': 0, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID, 'options': {'type': message.options.type, 'group_id': message.options.group_id, 'client_id': message.options.client_id}})
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     def group_invitation_accept_send(self):
         if (self.client.state == self.client.STATE_PENDING_INV):
@@ -176,7 +179,7 @@ class ClientSessionServer(ClientSession):
             self.invitation_timer.cancel()
             self.client.group_id = self.temporal_group_id
             self.client.decentralized = bool(self.temporal_group_type)
-            self._send(dictdata={'type': GroupInvitationAccept.TYPE, 'ack': 0, 'source_id': self.client.client_id, 'group_id': 0x00, 'options': {'type': self.temporal_group_type, 'group_id': self.temporal_group_id, 'client_id': self.client.client_id}})
+            self._send(dictdata={'type': GroupInvitationAccept.TYPE, 'ack': 0, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID, 'options': {'type': self.temporal_group_type, 'group_id': self.temporal_group_id, 'client_id': self.client.client_id}})
             self.temporal_group_id = self.temporal_group_type = 0
             # Create sessions in decentralized mode
             if (self.client.decentralized):
@@ -188,24 +191,19 @@ class ClientSessionServer(ClientSession):
     def group_invitation_accept_reception(self, message):
         if (message.sequence != self.last_seq_recv):
             log.info('[Group Invitation] (Accept receive) client_id={}'.format(message.client_id))
-            # Create sessions in decentralized mode
-            if (self.client.decentralized):
-                for user in self.client.user_list:
-                    if (user.client_id == message.source_id):
-                        log.debug('[Group Invitation Accept] (Session created in decentralized) username={}'.format(user.username))
-                        self.user_sessions.append(ClientSessionClient(self, user.username, user.client_id, user.address))
-                        break
-        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': 0x00})
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     def group_invitation_reject_send(self):
         if (self.client.state == self.client.STATE_PENDING_INV):
             log.info('[Group Invitation] (Reject send) group_type={}, group_id={}'.format(self.temporal_group_type, self.temporal_group_id))
             self.client.state = self.client.STATE_NORMAL
-            self._send(dictdata={'type': GroupInvitationReject.TYPE, 'ack': 0, 'source_id': self.client.client_id, 'group_id': 0x00, 'options': {'type': self.temporal_group_type, 'group_id': self.temporal_group_id, 'client_id': self.client.client_id}})
+            self._send(dictdata={'type': GroupInvitationReject.TYPE, 'ack': 0, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID, 'options': {'type': self.temporal_group_type, 'group_id': self.temporal_group_id, 'client_id': self.client.client_id}})
             self.temporal_group_id = self.temporal_group_type = 0
 
-    def group_invitation_reject_reception(self):
-        pass
+    def group_invitation_reject_reception(self, message):
+        if (message.sequence != self.last_seq_recv):
+            log.info('[Group Invitation] (Reject receive) client_id={}'.format(message.client_id))
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     def group_disjoint_request(self):
         pass
@@ -224,8 +222,12 @@ class ClientSessionServer(ClientSession):
                         found = True
                 if (not found):
                     self.client.user_list.append(ClientInfo(new_user['username'], new_user['client_id'], new_user['group_id'], (new_user['ip_address'], new_user['port'])))
+                if (self.client.decentralized): # Create sessions if decentralized mode
+                    if (new_user['group_id'] == self.client.group_id):
+                        log.debug('[Update List] (Session created in decentralized) username={}'.format(new_user['username']))
+                        self.client.user_sessions.append(ClientSessionClient(self, new_user['username'], new_user['client_id'], new_user['address']))
             log.info('[Update List] list={}'.format(self.client.user_list))
-        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': 0x00})
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     def update_disconnection(self, message):
         # TODO: Check if the user is in our group, we are in decentralized and delete session
@@ -240,12 +242,12 @@ class ClientSessionServer(ClientSession):
                             if (session.client_id == message.options.client_id):
                                 self.client.user_sessions.remove(session)
                     break
-        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': 0x00})
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     def disconnection_request(self):
         log.info('[Disconnection Request] username={}'.format(self.client.username))
         self.client.state = self.client.STATE_PENDING_DISC
-        self._send(dictdata={'type': DisconnectionRequest.TYPE, 'ack': 0, 'source_id': self.client.client_id, 'group_id': 0x00})
+        self._send(dictdata={'type': DisconnectionRequest.TYPE, 'ack': 0, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     def acknowledgement(self, message):
         if (message.sequence == self.last_seq_sent): # it can be for connection or any other message
@@ -295,13 +297,13 @@ class ClientSessionServer(ClientSession):
         elif (retry == -1): # last attempt expired -> not connected
             # Server unreachable or server unreachable for disconnection -> disconnected automatically
             log.info('[Server unreachable] (Timer expired)')
-            print('Server unreachable')
+            #print('Server unreachable')
             self.client.state = self.client.STATE_DISCONNECTED
 
     def _invitation_expired(self):
         log.debug('[Invitation] Invitation expired')
         self.client.state = self.client.STATE_NORMAL
-        print('Your invitation to the {} group {} has expired.'.format(
+        print('\033[1mYour invitation to the {} group {} has expired\033[0m'.format(
             'centralized' if (not self.temporal_group_type) else 'decentralized', self.temporal_group_id))
 
 # Class for sessions used by other clients (only decentralized mode)
@@ -322,7 +324,7 @@ class ClientSessionClient(ClientSession):
     def data_message_reception(self, message):
         log.info('[Data Message] (Receive message) text={}'.format(message.options.payload))
         print('{}: {}'.format(self.username, message.options.payload))
-        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': 0x00})
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     def acknowledgement(self, message):
         if (message.sequence == self.last_seq_sent): # it can be for connection or any other message
