@@ -87,7 +87,6 @@ class Client(object):
                                 # Look for session in decentralized mode
                                 for session in self.user_sessions:
                                     if (session.client_id == message_recv.source_id):
-                                        print session
                                         session.acknowledgement(message_recv)
                                         break
                         elif (message_recv.type == ConnectionAccept.TYPE): # if ACK after ConnectionAccept has been lost
@@ -175,5 +174,5 @@ class Client(object):
 
 # Execution
 if __name__ == '__main__':
-    log.basicConfig(format='%(levelname)s: %(message)s', level=log.DEBUG)
+    #log.basicConfig(format='%(levelname)s: %(message)s', level=log.DEBUG)
     sys.exit(Client().run())

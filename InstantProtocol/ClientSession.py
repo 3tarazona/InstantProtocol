@@ -71,6 +71,7 @@ class ClientSessionServer(ClientSession):
             self.timer.cancel() # stop timer
             self.state = self.STATE_IDLE
             log.info('[Connection] username={}, id={}'.format(self.client.username, self.client.client_id))
+            print('\033[1mLogged in as {}\033[0m'.format(self.client.username))
             self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     # only for server (id = 0x00)
@@ -80,12 +81,12 @@ class ClientSessionServer(ClientSession):
             self.state = self.STATE_IDLE
             if (message.options.error == 0):
                 log.info('[Connection] (Failed -> maximum reached')
-                print('Connection failed -> maximum number of users reached')
+                print('\033[1mConnection failed -> maximum number of users reached\033[0m')
             elif (message.options.error == 1):
                 log.info('[Connection] (Failed -> username already taken)')
-                print('Connection failed -> username already taken')
+                print('\033[1mConnection failed -> username already taken\033[0m')
             else:
-                print('Connection failed')
+                print('\033[1mConnection failed\033[0m')
         self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     def user_list_request(self):
@@ -128,7 +129,7 @@ class ClientSessionServer(ClientSession):
                 self.client.state = self.client.STATE_WAIT_GROUP
                 self._send(dictdata={'type': GroupCreationRequest.TYPE, 'ack': 0, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID, 'options': {'type': group_type, 'client_ids': client_ids}})
             else:
-                print('Cannot create group from the given arguments')
+                print('\033[1mCannot create group from the given arguments\033[0m')
 
     def group_creation_accept(self, message):
         if (message.sequence != self.last_seq_recv):
@@ -138,7 +139,7 @@ class ClientSessionServer(ClientSession):
                 self.client.group_id = message.options.group_id
                 self.client.decentralized = bool(message.options.type)
                 # Sessions in decentralized mode will be created based on UpdateList messages
-                print('\033[1mGroup creation accepted: Changing to group {} in {} mode\033[0m'.format(self.client.group_id, 'centralized' if (not self.client.decentralized) else 'decentralized'))
+                print('\033[1mChanging to group {} in {} mode\033[0m'.format(self.client.group_id, 'centralized' if (not self.client.decentralized) else 'decentralized'))
         self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     def group_creation_reject(self, message):
@@ -181,7 +182,7 @@ class ClientSessionServer(ClientSession):
             self.client.decentralized = bool(self.temporal_group_type)
             self._send(dictdata={'type': GroupInvitationAccept.TYPE, 'ack': 0, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID, 'options': {'type': self.temporal_group_type, 'group_id': self.temporal_group_id, 'client_id': self.client.client_id}})
             self.temporal_group_id = self.temporal_group_type = 0
-            print('\033[1mInvitation accepted: Changing to group {} in {} mode\033[0m'.format(self.client.group_id, 'centralized' if (not self.temporal_group_type) else 'decentralized'))
+            print('\033[1mChanging to group {} in {} mode\033[0m'.format(self.client.group_id, 'centralized' if (not self.temporal_group_type) else 'decentralized'))
             # Create sessions in decentralized mode
             if (self.client.decentralized):
                 self.client.user_sessions = list() # empty list
@@ -220,8 +221,9 @@ class ClientSessionServer(ClientSession):
             self.client.decentralized = False # centralized by default
             self.client.user_sessions = list() # empty list
             self._send(dictdata={'type': GroupDisjointRequest.TYPE, 'ack':0, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
+            print('\033[1mYou have left the group\033[0m')
         else:
-            print('Cannot disjoint from Public Group')
+            print('\033[1mCannot disjoint from Public Group\033[0m')
 
     def group_dissolution(self, message):
         if (message.sequence != self.last_seq_recv):
@@ -230,6 +232,7 @@ class ClientSessionServer(ClientSession):
                 self.client.user_sessions = list() # empty list
             self.client.group_id = self.client.PUBLIC_GROUP_ID
             self.client.decentralized = False # centralized by default
+            print('\033[1mYou have left the group (you were alone)\033[1m')
         self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     def update_list(self, message):
@@ -238,19 +241,24 @@ class ClientSessionServer(ClientSession):
                 found = False
                 for old_user in self.client.user_list:
                     if (old_user.client_id == new_user['client_id']):
-                        if ((self.client.decentralized) and (old_user.group_id == self.client.group_id)):
-                            for session in self.client.user_sessions:
-                                if (session.client_id == old_user.client_id):
-                                    self.client.user_sessions.remove(session)
+                        if (old_user.group_id == self.client.group_id): # we were in the same group
+                            print('\033[1m{} has left the group\033[0m'.format(old_user.username))
+                            if (self.client.decentralized):
+                                for session in self.client.user_sessions:
+                                    if (session.client_id == old_user.client_id):
+                                        self.client.user_sessions.remove(session)
                         old_user.group_id = new_user['group_id'] # in this protocol, only group_id can change (other values are fixed)
+                        # Are we in the same group now?
                         if (new_user['group_id'] == self.client.group_id):
-                            self.client.user_sessions.append(ClientSessionClient(self.client, new_user['username'], new_user['client_id'], (new_user['ip_address'], new_user['port'])))
+                            print('\033[1m{} has joined the group\033[0m'.format(old_user.username))
+                            if (self.client.decentralized):
+                                self.client.user_sessions.append(ClientSessionClient(self.client, new_user['username'], new_user['client_id'], (new_user['ip_address'], new_user['port'])))
                         found = True
                         break
                 if (not found):
+                    print('\033[1m{} has joined the group\033[0m'.format(new_user['username']))
                     self.client.user_list.append(ClientInfo(new_user['username'], new_user['client_id'], new_user['group_id'], (new_user['ip_address'], new_user['port'])))
                     if (self.client.decentralized): # we add him to our session list
-                        print 'add use rto list'
                         self.client.user_sessions.append(ClientSessionClient(self.client, new_user['username'], new_user['client_id'], (new_user['ip_address'], new_user['port'])))
 
             log.info('[Update List] list={}'.format(self.client.user_list))
@@ -261,6 +269,7 @@ class ClientSessionServer(ClientSession):
             for user in self.client.user_list:
                 if (user.client_id == message.options.client_id): # it is possible we don't have this user
                     log.info('[Update Disconnection] client_id={}'.format(user.client_id))
+                    print('\033[1m{} has left the group\033[0m'.format(user.username))
                     self.client.user_list.remove(user)
                     # If we are in a decentralized group and the client is in our group
                     if ((user.group_id == self.client.group_id) and (self.client.decentralized)):
