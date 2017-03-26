@@ -25,7 +25,7 @@ class Client(object):
     STATE_DISJOINT = 5
     STATE_DISCONNECTED = 6
 
-    def __init__(self, server_address=('localhost', 1313), buffer=socket.SO_RCVBUF):
+    def __init__(self, server_address=('localhost', 1313), buffer=1024):
         self.server_address = server_address
         self.username = None # asked later
         self.client_id = 0 # changed later
