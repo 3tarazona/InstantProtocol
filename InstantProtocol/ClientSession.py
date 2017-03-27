@@ -363,7 +363,7 @@ class ClientSessionClient(ClientSession):
         if (message.sequence != self.last_seq_recv):
             log.info('[Data Message] (Receive message) text={}'.format(message.options.payload))
             print('\033[1m{}:\033[0m {}'.format(self.username, message.options.payload))
-            self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     def acknowledgement(self, message):
         if (message.sequence == self.last_seq_sent): # it can be for connection or any other message

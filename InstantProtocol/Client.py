@@ -139,7 +139,11 @@ class Client(object):
                             arguments = user_input.split(' ')
                             if (arguments[0] == '/create_group'):
                                 # '/create_group 0 erika jesus' (<command> <type> [<client usernames>])
-                                group_type = int(arguments[1])
+                                try:
+                                    group_type = int(arguments[1])
+                                except ValueError:
+                                    print('\033[1mCannot create group from the given arguments\033[0m')
+                                    continue
                                 self.server_session.group_creation_request(group_type, arguments[2:])
                             elif (arguments[0] == '/invite_group'):
                                 self.server_session.group_invitation_request_send(arguments[1:])
