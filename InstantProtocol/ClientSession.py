@@ -54,8 +54,8 @@ class ClientSessionServer(ClientSession):
         self.invitation_timer = None
 
     def __repr__(self):
-        return 'ClientSessionServer(username={}, client_id={}, address={}, last_seq_sent={}, last_seq_recv={}, state={}, message_queue={})'.format(
-            'Server', self.client.SERVER_ID, self.address, self.last_seq_sent, self.last_seq_recv, self.state, self.message_queue)
+        return 'ClientSessionServer(client={}, address={}, last_seq_sent={}, last_seq_recv={}, state={}, message_queue={}, timer={}, temporal_group_id={}, temporal_group_type={}, invitation_timer={})'.format(
+            self.client, self.address, self.last_seq_sent, self.last_seq_recv, self.state, self.message_queue, self.timer, self.temporal_group_id, self.temporal_group_type, self.invitation_timer)
 
     def connection_request(self, username):
         if (self.client.state == self.client.STATE_PENDING_CONN):
@@ -68,16 +68,16 @@ class ClientSessionServer(ClientSession):
         if (self.client.state == self.client.STATE_PENDING_CONN):
             self.client.state = self.client.STATE_NORMAL
             self.client.client_id = message.options.client_id
-            self.timer.cancel() # stop timer
+            self.timer.cancel() # stop timer (implicit ACK)
             self.state = self.STATE_IDLE
             log.info('[Connection] username={}, id={}'.format(self.client.username, self.client.client_id))
             print('\033[1mLogged in as {}\033[0m'.format(self.client.username))
-            self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     # only for server (id = 0x00)
     def connection_reject(self, message):
         if (self.client.state == self.client.STATE_PENDING_CONN):
-            self.timer.cancel() # stop timer
+            self.timer.cancel() # stop timer (implicit ACK)
             self.state = self.STATE_IDLE
             if (message.options.error == 0):
                 log.info('[Connection] (Failed -> maximum reached')
@@ -95,7 +95,7 @@ class ClientSessionServer(ClientSession):
 
     def user_list_response(self, message):
         if (message.sequence != self.last_seq_recv): # we always send an ACK even if the message is repeated (lost ACK)
-            self.timer.cancel() # stop timer
+            self.timer.cancel() # stop timer (implicit ACK)
             self.state = self.STATE_IDLE # response has implicit ACK
             # Create list (add also ourselves)
             for user in message.options.user_list:
@@ -130,6 +130,8 @@ class ClientSessionServer(ClientSession):
                 self._send(dictdata={'type': GroupCreationRequest.TYPE, 'ack': 0, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID, 'options': {'type': group_type, 'client_ids': client_ids}})
             else:
                 print('\033[1mCannot create group from the given arguments\033[0m')
+        else:
+            print('\033[1mCannot create a group under your current situation\033[0m')
 
     def group_creation_accept(self, message):
         if (message.sequence != self.last_seq_recv):
@@ -182,7 +184,7 @@ class ClientSessionServer(ClientSession):
             self.client.decentralized = bool(self.temporal_group_type)
             self._send(dictdata={'type': GroupInvitationAccept.TYPE, 'ack': 0, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID, 'options': {'type': self.temporal_group_type, 'group_id': self.temporal_group_id, 'client_id': self.client.client_id}})
             self.temporal_group_id = self.temporal_group_type = 0
-            print('\033[1mChanging to group {} in {} mode\033[0m'.format(self.client.group_id, 'centralized' if (not self.temporal_group_type) else 'decentralized'))
+            print('\033[1mChanging to group {} in {} mode\033[0m'.format(self.client.group_id, 'centralized' if (not self.client.decentralized) else 'decentralized'))
             # Create sessions in decentralized mode
             if (self.client.decentralized):
                 self.client.user_sessions = list() # empty list
@@ -194,7 +196,7 @@ class ClientSessionServer(ClientSession):
     def group_invitation_accept_reception(self, message):
         if (message.sequence != self.last_seq_recv):
             # Changes in UpdateList
-            log.info('[Group Invitation] (Accept receive) client_id={}'.format(message.client_id))
+            log.info('[Group Invitation] (Accept receive) client_id={}'.format(message.source_id))
         self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     def group_invitation_reject_send(self):
@@ -232,7 +234,7 @@ class ClientSessionServer(ClientSession):
                 self.client.user_sessions = list() # empty list
             self.client.group_id = self.client.PUBLIC_GROUP_ID
             self.client.decentralized = False # centralized by default
-            print('\033[1mYou have left the group (you were alone)\033[1m')
+            print('\033[1mYou have left the group (you were alone)\033[0m')
         self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     def update_list(self, message):
@@ -255,11 +257,10 @@ class ClientSessionServer(ClientSession):
                                 self.client.user_sessions.append(ClientSessionClient(self.client, new_user['username'], new_user['client_id'], (new_user['ip_address'], new_user['port'])))
                         found = True
                         break
-                if (not found):
-                    print('\033[1m{} has joined the group\033[0m'.format(new_user['username']))
+                if (not found): # if he is new in the system -> he is in Public Group
                     self.client.user_list.append(ClientInfo(new_user['username'], new_user['client_id'], new_user['group_id'], (new_user['ip_address'], new_user['port'])))
-                    if (self.client.decentralized): # we add him to our session list
-                        self.client.user_sessions.append(ClientSessionClient(self.client, new_user['username'], new_user['client_id'], (new_user['ip_address'], new_user['port'])))
+                    if (self.client.group_id == self.client.PUBLIC_GROUP_ID):
+                        print('\033[1m{} has joined the group\033[0m'.format(new_user['username']))
 
             log.info('[Update List] list={}'.format(self.client.user_list))
         self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
@@ -269,14 +270,15 @@ class ClientSessionServer(ClientSession):
             for user in self.client.user_list:
                 if (user.client_id == message.options.client_id): # it is possible we don't have this user
                     log.info('[Update Disconnection] client_id={}'.format(user.client_id))
-                    print('\033[1m{} has left the group\033[0m'.format(user.username))
                     self.client.user_list.remove(user)
                     # If we are in a decentralized group and the client is in our group
-                    if ((user.group_id == self.client.group_id) and (self.client.decentralized)):
-                        for session in self.client.user_sessions:
-                            if (session.client_id == message.options.client_id):
-                                self.client.user_sessions.remove(session)
-                    break
+                    if (user.group_id == self.client.group_id):
+                        print('\033[1m{} has left the group\033[0m'.format(user.username))
+                        if (self.client.decentralized):
+                            for session in self.client.user_sessions:
+                                if (session.client_id == message.options.client_id):
+                                    self.client.user_sessions.remove(session)
+                    break # we found the user -> out of loop
         self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     def disconnection_request(self):
@@ -335,6 +337,7 @@ class ClientSessionServer(ClientSession):
             #print('Server unreachable')
             self.client.state = self.client.STATE_DISCONNECTED
 
+    # This function is called when invitation timer expires (15 seconds to answer)
     def _invitation_expired(self):
         log.debug('[Invitation] Invitation expired')
         self.client.state = self.client.STATE_NORMAL
@@ -349,17 +352,18 @@ class ClientSessionClient(ClientSession):
         self.client_id = client_id # self.group_id is not required because session is created in decentralized mode (only users of the same group)
 
     def __repr__(self):
-        return 'ClientSessionClient(username={}, client_id={}, address={}, last_seq_sent={}, last_seq_recv={}, state={}, message_queue={})'.format(
-            self.username, self.client_id, self.address, self.last_seq_sent, self.last_seq_recv, self.state, self.message_queue)
+        return 'ClientSessionClient(client={}, address={}, last_seq_sent={}, last_seq_recv={}, state={}, message_queue={}, timer={}, username={}, client_id={}'.format(
+            self.client, self.address, self.last_seq_sent, self.last_seq_recv, self.state, self.message_queue, self.username, self.client_id)
 
     def data_message_send(self, text):
         log.info('[Data Message] (Send message) text={}'.format(text))
         self._send(dictdata={'type': DataMessage.TYPE, 'ack': 0, 'source_id': self.client.client_id, 'group_id': self.client.group_id, 'options': {'data_length': len(text), 'payload': text}})
 
     def data_message_reception(self, message):
-        log.info('[Data Message] (Receive message) text={}'.format(message.options.payload))
-        print('\033[1m{}:\033[0m {}'.format(self.username, message.options.payload))
-        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
+        if (message.sequence != self.last_seq_recv):
+            log.info('[Data Message] (Receive message) text={}'.format(message.options.payload))
+            print('\033[1m{}:\033[0m {}'.format(self.username, message.options.payload))
+            self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
 
     def acknowledgement(self, message):
         if (message.sequence == self.last_seq_sent): # it can be for connection or any other message
@@ -375,6 +379,7 @@ class ClientSessionClient(ClientSession):
     def _send(self, dictdata, retry=1):
         # When ACK there's no UDP reliability
         if ((dictdata.get('ack') == 0x01)):
+            self.last_seq_recv = dictdata.get('sequence') # if we send an ACK, we are acknowledging the last sequence
             message = InstantProtocolMessage(dictdata=dictdata)
             log.debug('[---] Sending ACK -> {}'.format(message))
             self.client.sock.sendto(message.serialize(), self.address)

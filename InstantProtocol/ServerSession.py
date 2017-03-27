@@ -43,12 +43,12 @@ class ServerSession(object):
         self.invitation_timer = None # timer for group creation or invitation
         self.invited_by = None # session of the user who invited us to join a group (invitation or creation)
 
-        # Send message to user -> Connection Accepted (and session created for this user)
+        # Send message to user -> Connection Accept (and session created for this user)
         self._send(dictdata={'type': ConnectionAccept.TYPE, 'ack':0, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID, 'options': {'client_id': self.client_id}})
 
     def __repr__(self):
-        return 'ServerSession(username={}, client_id={}, group_id={}, group_type={}, last_seq_sent={}, last_seq_recv={}, state={}, message_queue={})'.format(
-            self.username, self.client_id, self.group_id, self.group_type, self.last_seq_sent, self.last_seq_recv, self.state, self.message_queue)
+        return 'ServerSession(username={}, client_id={}, group_id={}, group_type={}, last_seq_sent={}, last_seq_recv={}, state={}, message_queue={}, timer={}, creating_group={}, num_invited_clients={}, inviting={}, invitation_timer={}, invited_by={})'.format(
+            self.username, self.client_id, self.group_id, self.group_type, self.last_seq_sent, self.last_seq_recv, self.state, self.message_queue, self.timer, self.creating_group, self.num_invited_clients, self.inviting, self.invitation_timer, self.invited_by)
 
     def user_list_response(self, message):
         log.info('[User List] username={}'.format(self.username))
@@ -76,7 +76,7 @@ class ServerSession(object):
             for session in self.server.session_list:
                 if (session.client_id in message.options.client_ids):
                     session.invited_by = self
-                    session.invitation_timer = threading.Timer(self.GROUP_TIMER, self.group_invitation_reject, []) # set a timer and group_creation_reject will be called when it expires
+                    session.invitation_timer = threading.Timer(self.GROUP_TIMER, self.group_creation_reject, []) # set a timer and group_creation_reject (of the sender) will be called when it expires
                     session.invitation_timer.start()
                     session._send(dictdata={'type': GroupInvitationRequest.TYPE, 'ack': 0, 'source_id': message.source_id, 'group_id': message.group_id, 'options': {'type': message.options.type, 'group_id': group_id, 'client_id': session.client_id}})
         self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID})
@@ -87,16 +87,20 @@ class ServerSession(object):
         self.num_invited_clients = 0
         self.group_type = group_type
         self.group_id = group_id
+        print('\033[1mGroup {} created in {} mode\033[0m'.format(self.group_id, 'centralized' if self.group_type == 0 else 'decentralized'))
         self._send(dictdata={'type': GroupCreationAccept.TYPE, 'ack': 0, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID, 'options': {'type': group_type, 'group_id': group_id}})
         for session in self.server.session_list:
             if (session != self):
                 session.update_list([self])
 
     def group_creation_reject(self):
-        if (self.creating_group): # timer expired
-            self.creating_group = False
-            self.num_invited_clients = 0
-            self._send(dictdata={'type': GroupCreationReject.TYPE, 'ack':0, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID})
+        if (self.creating_group): # timer expired (called by group creation request for each invitation failed)
+            if (self.num_invited_clients == 1): # last invited client (then we cancel Group Creation)
+                self.creating_group = False
+                self.num_invited_clients = 0
+                self._send(dictdata={'type': GroupCreationReject.TYPE, 'ack':0, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID})
+            else:
+                self.num_invited_clients -= 1
 
     def group_invitation_request(self, message):
         if (message.sequence != self.last_seq_recv):
@@ -105,7 +109,7 @@ class ServerSession(object):
                 if (session.client_id == message.options.client_id):
                     if (session.invited_by == None): # client is not being invited at this moment
                         session.invited_by = self
-                        session.invitation_timer = threading.Timer(self.GROUP_TIMER, self.group_invitation_reject, [])
+                        session.invitation_timer = threading.Timer(self.GROUP_TIMER, session.group_invitation_reject, [])
                         session.invitation_timer.start()
                         session._send(dictdata={'type': GroupInvitationRequest.TYPE, 'ack': 0, 'source_id': message.source_id, 'group_id': self.NO_GROUP_ID, 'options': {'type': message.options.type, 'group_id': self.group_id, 'client_id': session.client_id}})
                     else: # notify that user rejected invitation because he's waiting for other invitation
@@ -113,55 +117,47 @@ class ServerSession(object):
                     break # only one user
         self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID})
 
-    def group_invitation_accept(self, message=None, client_id=None, group_id=None, group_type=None):
-        # the session that has sent the invitation (creating group or invited), session in which the timer was expired calls the session that invites
-        if (message): # message reception
-            if (message.sequence != self.last_seq_recv):
-                log.info('[Invitation Accept] username={}, group_id={}'.format(self.username, message.options.group_id))
-                self.group_id = message.options.group_id
-                self.group_type = message.options.type
-                self.invitation_timer.cancel()
-                self.invited_by.group_invitation_accept(client_id=self.client_id, group_id=message.options.group_id, group_type=message.options.type) # send invitation accept back
-                self.invited_by = None
-                for session in self.server.session_list:
-                    if (session != self):
-                        session.update_list([self])
-            self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID})
-        elif ((client_id is not None) and (group_id is not None) and (group_type is not None)):
-            if (self.creating_group):
-                self.group_creation_accept(group_type, group_id)
-            elif (self.inviting):
-                self.inviting = False
-                self._send(dictdata={'type': GroupInvitationAccept.TYPE, 'ack': 0, 'source_id': message.source_id, 'group_id': self.NO_GROUP_ID, 'options': {'type': group_type, 'group_id': group_id, 'client_id': client_id}})
+    def group_invitation_accept(self, message):
+        if (message.sequence != self.last_seq_recv):
+            log.info('[Invitation Accept] username={}, group_id={}'.format(self.username, message.options.group_id))
+            self.group_id = message.options.group_id
+            self.group_type = message.options.type
+            self.invitation_timer.cancel()
+            if (self.invited_by.creating_group):
+                self.invited_by.group_creation_accept(message.options.type, message.options.group_id)
+            else:
+                print('\033[1mUser {} changed to group {}\033[0m'.format(self.username, self.group_id))
+                self._send(dictdata={'type': GroupInvitationAccept.TYPE, 'ack': 0, 'source_id': message.source_id, 'group_id': self.NO_GROUP_ID, 'options': {'type': message.options.type, 'group_id': message.options.group_id, 'client_id': self.client_id}}) # send invitation accept back
+            self.invited_by = None
+            for session in self.server.session_list:
+                if (session != self):
+                    session.update_list([self])
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID})
 
-    def group_invitation_reject(self, message=None, client_id=None, group_id=None, group_type=None):
+    def group_invitation_reject(self, message=None):
         # the session that has sent the invitation (creating group or invited), session in which the timer was expired calls the session that invites
         if (message): # message reception
             if (message.sequence != self.last_seq_recv):
                 log.info('[Group Invitation Reject] username={}, group_id={}'.format(self.username, message.options.group_id))
                 self.invitation_timer.cancel()
-                self.invited_by.group_invitation_reject(client_id=self.client_id, group_id=message.options.group_id, group_type=message.options.type) # notify to the session that invited that the invitation has been rejected
+                if (self.invited_by.creating_group):
+                    self.invited_by.group_creation_reject()
+                else: # inviting
+                    self.invited_by._send(dictdata={'type': GroupInvitationReject.TYPE, 'ack': 0, 'source_id': message.source_id, 'group_id': self.NO_GROUP_ID, 'options': {'type': message.options.type, 'group_id': message.options.group_id}}) # notify to the session that invited that the invitation has been rejected
                 self.invited_by = None # remove state of invitation
             self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID})
-        elif ((client_id is not None) and (group_id is not None) and (group_type is not None)):
-            if (self.creating_group):
-                if (self.num_invited_clients == 1): # last invited client (then we cancel Group Creation)
-                    self.group_creation_reject()
-                else:
-                    self.num_invited_clients -= 1
-            elif (self.inviting):
-                self._send(dictdata={'type': GroupInvitationReject, 'ack':0, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID})
         else: # timer expires in session who is being invited (this session)
-            self.invited_by.group_invitation_reject(client_id=self.client_id, group_id=self.temporal_group_id, group_type=self.temporal_group_type)
+            # we send rejection anyway (even if it is send when timer expires)
+            self.invited_by._send(dictdata={'type': GroupInvitationReject.TYPE, 'ack': 0, 'source_id': self.client_id, 'group_id': self.NO_GROUP_ID, 'options': {'type': self.invited_by.group_type, 'group_id': self.invited_by.group_id}}) # notify to the session that invited that the invitation has been rejected
             self.invited_by = None
 
     def group_disjoint_request(self, message):
         if (message.sequence != self.last_seq_recv):
             log.info('[Disjoint Request] username={}'.format(self.username))
+            print('\033[1mUser {} leaved from group {}\033[0m'.format(self.username, self.group_id))
             old_group_id = self.group_id
             self.group_id = self.PUBLIC_GROUP_ID
             self.group_type = self.PUBLIC_GROUP_TYPE
-            self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID})
             # Send update to all users
             for session in self.server.session_list:
                 if (session != self):
@@ -175,10 +171,11 @@ class ServerSession(object):
                     last_session = session
             if (users_group == 1): # minimum 2 users per group (1 has left so...)
                 last_session.group_dissolution() # disolve group
-
+        self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID})
 
     def group_dissolution(self):
         log.info('[Group Dissolution] username={}'.format(self.username))
+        print('\033[1mUser {} requested for resolution in group {}\033[0m'.format(self.username, self.group_id))
         self.group_id = self.PUBLIC_GROUP_ID
         self.group_type = self.PUBLIC_GROUP_TYPE
         self._send(dictdata={'type': GroupDissolution.TYPE, 'ack': 0, 'source_id': self.SERVER_ID, 'group_id': self.group_id})
@@ -202,18 +199,18 @@ class ServerSession(object):
     def disconnection_request(self, message):
         if (message.sequence != self.last_seq_recv):
             log.info('[Disconnection] (Requested by user) username={}, id={}'.format(self.username, self.client_id))
+            print('\033[1mUser {} disconnected\033[0m'.format(self.username))
             self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.SERVER_ID, 'group_id': self.NO_GROUP_ID})
             # Count if there are enough clients in the group (same as Group Disjoint)
             if (self.group_id != self.PUBLIC_GROUP_ID):
                 users_group = 0
                 last_session = None
                 for session in self.server.session_list:
-                    if (self.group_id == session.group_id):
+                    if ((session != self) and (self.group_id == session.group_id)):
                         users_group += 1
                         last_session = session
                 if (users_group == 1): # minimum 2 users per group (1 has left so...)
                     last_session.group_dissolution() # disolve group
-                    last_session.update_list([self])
             # Send update to all users
             for session in self.server.session_list:
                 if (session != self):
@@ -230,7 +227,7 @@ class ServerSession(object):
                 log.info('[Connection] username={}, id={}'.format(self.username, self.client_id))
                 log.debug(self.server.session_list)
 
-            # Normal behavior
+            # Normal behavior -> Stop & Wait (I only wait for one message to be acknowledgement)
             log.debug('[ACK] ACK received')
             self.state = self.STATE_IDLE
             self.timer.cancel() # stop timer
@@ -250,7 +247,7 @@ class ServerSession(object):
         # First attempt
         elif (retry == 1):
             # Can we send?
-            if ((self.state == self.STATE_PENDING_CONN) or (self.state == self.STATE_IDLE)):
+            if ((self.state == self.STATE_IDLE) or (self.state == self.STATE_PENDING_CONN)):
                 self.last_seq_sent = 1 - self.last_seq_sent # swap: 0 to 1 and viceversa
                 dictdata['sequence'] = self.last_seq_sent # set sequence (different each message)
                 message = InstantProtocolMessage(dictdata=dictdata)

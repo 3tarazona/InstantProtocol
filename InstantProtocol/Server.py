@@ -48,13 +48,14 @@ class Server(object):
                         log.info('[Connection] (Failed -> maximum reached) {}'.format(new_username))
                         message_reject = InstantProtocolMessage(dictdata={'type': ConnectionReject.TYPE, 'sequence': 0, 'ack': 0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'error': 0}})
                         self.sock.sendto(message_reject.serialize(), client_address)
-                    elif (any(s.username == new_username for s in self.session_list)): # username not used
+                    elif (any(new_username == s.username for s in self.session_list)): # username not used
                         log.info('[Connection] (Failed -> username already taken) {}'.format(new_username))
                         message_reject = InstantProtocolMessage(dictdata={'type': ConnectionReject.TYPE, 'sequence': 0, 'ack': 0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'error': 1}})
                         self.sock.sendto(message_reject.serialize(), client_address)
                     else:
                         # Create new session and add it to the list
                         log.info('[Connection] username={}'.format(new_username))
+                        print('\033[1mUser {} connected\033[0m'.format(new_username))
                         new_session = ServerSession(self, new_username, self.pool_client_ids.pop(0), client_address)
                         self.session_list.append(new_session)
 
@@ -81,9 +82,7 @@ class Server(object):
 
                 elif (message_recv.type == DisconnectionRequest.TYPE):
                     # it's possible to loose an ACK when disconnection (ignore this message because the session isn't longer available)
-                    session = self._get_session(message_recv.source_id)
-                    if (session):
-                        session.disconnection_request(message_recv)
+                    self._get_session(message_recv.source_id).disconnection_request(message_recv)
 
             except KeyboardInterrupt:
                 log.info('Closing server...')
@@ -93,6 +92,7 @@ class Server(object):
             except SessionNotFound:
                 log.error('Session not found, message coming from unexpected source')
 
+    # This function returns session of the message (user handler)
     def _get_session(self, source_id):
         for session in self.session_list:
             if (session.client_id == source_id):
@@ -102,5 +102,6 @@ class Server(object):
 
 # Execution
 if __name__ == '__main__':
+    # Comment following line of code to disable log output
     log.basicConfig(format='%(levelname)s: %(message)s', level=log.DEBUG)
     sys.exit(Server(loss_rate=0).run())
