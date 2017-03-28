@@ -3,6 +3,6 @@ Instant Messenger Protocol offers to upper layer a way to exchange written messa
 
 ## Features
 - All clients are in the public group by default
-- Any client can create a new group, centralized or decentralized
+- Any client can create a new private group, centralized or decentralized
 - Any client can invite other client to its private group
-- Any client can leave its private group
+- Any client can leave a private group
