@@ -5,7 +5,6 @@
 
 import struct
 import socket
-import sys
 
 # Base object -> it will create any message from application or network
 class InstantProtocolMessage(object):
@@ -740,50 +739,3 @@ class Acknowledgement(object):
 
     def __repr__(self):
         return '[ack]'.format() # print 'ack' to show that it's a special type
-
-## Testing
-#dictdata={'type': 0x00, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'username': 'Jesus'}}
-#dictdata={'type': 0x01, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'client_id': 227}}
-#dictdata={'type': 0x02, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'error': 1}}
-#dictdata={'type': 0x03, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00}
-#dictdata={'type': 0x04, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {
-#   'user_list': [{'client_id': 127, 'group_id': 119, 'username': 'Jesus', 'ip_address': '127.0.0.1', 'port': 1202},
-#       {'client_id': 128, 'group_id': 123, 'username': 'Erika', 'ip_address': '127.0.0.1', 'port': 1400}]}})
-#dictdata={'type': 0x05, 'sequence':1, 'ack':0, 'source_id': 22, 'group_id': 25, 'options': {'data_length': len('Testing this amazing protocol'), 'payload': 'Testing this amazing protocol'}}
-#dictdata={'type': 0x06, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'type':1, 'client_ids':[1,2,3,4,5]}}
-#dictdata={'type': 0x07, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'type': 0, 'group_id': 121}}
-#dictdata={'type': 0x08, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00}
-#dictdata={'type': 0x09, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'type': 0, 'group_id': 121}}
-#dictdata={'type': 0x09, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'type': 0, 'group_id': 121}}
-#dictdata={'type': 0x0A, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'type': 0, 'group_id': 121}}
-#dictdata={'type': 0x0B, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'type': 0, 'group_id': 121}}
-#dictdata={'type': 0x0B, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00}
-#dictdata={'type': 0x0C, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00}
-#dictdata={'type': 0x0D, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00}
-#dictdata={'type': 0x0E, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {
-#'user_list': [{'client_id': 127, 'group_id': 119, 'username': 'Jesus', 'ip_address': '127.0.0.1', 'port': 1202},
-#    {'client_id': 128, 'group_id': 123, 'username': 'Erika', 'ip_address': '127.0.0.1', 'port': 1400}]}})
-#dictdata={'type': 0x0F, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {'client_id': 68}}
-#dictdata={'type': 0x10, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00}
-#dictdata={'type': 0x10, 'sequence':0, 'ack':1, 'source_id': 0x00, 'group_id': 0x00}
-
-"""
-mes = InstantProtocolMessage(dictdata={'type': 0x0E, 'sequence':0, 'ack':0, 'source_id': 0x00, 'group_id': 0x00, 'options': {
-    'user_list': [{'client_id': 127, 'group_id': 119, 'username': 'Jesus', 'ip_address': '127.0.0.1', 'port': 1202},
-        {'client_id': 128, 'group_id': 123, 'username': 'Erika', 'ip_address': '127.0.0.1', 'port': 1400}]}})
-print mes
-
-address = ('localhost', 1212)
-
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
-#sock.bind(('localhost', 4242))
-
-sock.sendto(mes.serialize(), address)
-
-data = sock.recv(1024)
-
-mes2 = InstantProtocolMessage(rawdata=data)
-print mes2
-
-sock.close()
-"""

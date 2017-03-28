@@ -236,7 +236,7 @@ class ServerSession(object):
                 self._send(self.message_queue.pop(0))
 
     # Private function (send with reliability)
-    def _send(self, dictdata, retry=1):
+    def _send(self, dictdata, retry=5):
         # When ACK not UDP reliability
         if (dictdata.get('ack') == 0x01):
             self.last_seq_recv = dictdata.get('sequence') # if we send an ACK, we are acknowledging the last sequence
@@ -245,13 +245,13 @@ class ServerSession(object):
             self.server.sock.sendto(message.serialize(), self.address)
         ## UDP reliability
         # First attempt
-        elif (retry == 1):
+        elif (retry == 5):
             # Can we send?
             if ((self.state == self.STATE_IDLE) or (self.state == self.STATE_PENDING_CONN)):
                 self.last_seq_sent = 1 - self.last_seq_sent # swap: 0 to 1 and viceversa
                 dictdata['sequence'] = self.last_seq_sent # set sequence (different each message)
                 message = InstantProtocolMessage(dictdata=dictdata)
-                log.debug('[STATE_IDLE] Sending message (retry=1) -> {}'.format(message))
+                log.debug('[STATE_IDLE] Sending message (retry={}) -> {}'.format(retry, message))
                 self.server.sock.sendto(message.serialize(), self.address)
                 if (self.state == self.STATE_IDLE):
                     self.state = self.STATE_ACK
@@ -263,9 +263,9 @@ class ServerSession(object):
                 log.debug('[STATE_ACK] Message queued') # don't show the message because it doesn't have sequence yet
                 self.message_queue.append(dictdata)
 
-        elif (retry == 0): # last attempt
+        elif (retry > -1): # next attempts
             message = InstantProtocolMessage(dictdata=dictdata) # dictada has sequence
-            log.debug('[STATE_IDLE] Sending message (retry=0) -> {}'.format(message))
+            log.debug('[STATE_IDLE] Sending message (retry={}) -> {}'.format(retry, message))
             self.server.sock.sendto(message.serialize(), self.address)
             self.timer = threading.Timer(self.RESEND_TIMER, self._send, [dictdata, retry - 1])
             self.timer.start()

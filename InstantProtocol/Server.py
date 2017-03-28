@@ -8,9 +8,7 @@ import sys
 import struct
 import random
 import logging as log
-#from InstantProtocol import *
-#import SocketError
-#import ServerSession
+
 # Temporal
 execfile('InstantProtocol.py')
 execfile('SocketError.py')
@@ -103,5 +101,5 @@ class Server(object):
 # Execution
 if __name__ == '__main__':
     # Comment following line of code to disable log output
-    log.basicConfig(format='%(levelname)s: %(message)s', level=log.DEBUG)
-    sys.exit(Server(loss_rate=0).run())
+    log.basicConfig(format='%(levelname)s: %(message)s', level=log.DEBUG) # DEBUG, INFO, WARN, CRITICAL
+    sys.exit(Server(loss_rate=0.1).run())

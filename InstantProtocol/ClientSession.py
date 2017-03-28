@@ -140,6 +140,11 @@ class ClientSessionServer(ClientSession):
                 self.client.state = self.client.STATE_NORMAL
                 self.client.group_id = message.options.group_id
                 self.client.decentralized = bool(message.options.type)
+                # Update user in the list
+                for user in self.client.user_list:
+                    if (user.client_id == self.client.client_id):
+                        user.group_id = message.options.group_id
+                        break
                 # Sessions in decentralized mode will be created based on UpdateList messages
                 print('\033[1mChanging to group {} in {} mode\033[0m'.format(self.client.group_id, 'centralized' if (not self.client.decentralized) else 'decentralized'))
         self._send(dictdata={'type': message.type, 'sequence': message.sequence, 'ack': 1, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID})
@@ -185,6 +190,11 @@ class ClientSessionServer(ClientSession):
             self._send(dictdata={'type': GroupInvitationAccept.TYPE, 'ack': 0, 'source_id': self.client.client_id, 'group_id': self.NO_GROUP_ID, 'options': {'type': self.temporal_group_type, 'group_id': self.temporal_group_id, 'client_id': self.client.client_id}})
             self.temporal_group_id = self.temporal_group_type = 0
             print('\033[1mChanging to group {} in {} mode\033[0m'.format(self.client.group_id, 'centralized' if (not self.client.decentralized) else 'decentralized'))
+            # Update user in the list
+            for user in self.client.user_list:
+                if (user.client_id == self.client.client_id):
+                    user.group_id = self.client.group_id
+                    break
             # Create sessions in decentralized mode
             if (self.client.decentralized):
                 self.client.user_sessions = list() # empty list
@@ -299,7 +309,7 @@ class ClientSessionServer(ClientSession):
                 self.client.state = self.client.STATE_DISCONNECTED
 
     # Private function (send with reliability)
-    def _send(self, dictdata, retry=1):
+    def _send(self, dictdata, retry=5):
         # When ACK there's no UDP reliability
         if ((dictdata.get('ack') == 0x01)):
             self.last_seq_recv = dictdata.get('sequence') # client always replies with an ACK
@@ -307,13 +317,13 @@ class ClientSessionServer(ClientSession):
             log.debug('[---] Sending ACK -> {}'.format(message))
             self.client.sock.sendto(message.serialize(), self.address)
         ## UDP reliability
-        elif (retry == 1): # first attempt
+        elif (retry == 5): # first attempt
             # Can we send?
             if (self.state == self.STATE_IDLE):
                 self.last_seq_sent = 1 - self.last_seq_sent # swap: 0 to 1 and viceversa
                 dictdata['sequence'] = self.last_seq_sent # set sequence (different each message)
                 message = InstantProtocolMessage(dictdata=dictdata)
-                log.debug('[STATE_IDLE] Sending message (retry=1) -> {}'.format(message))
+                log.debug('[STATE_IDLE] Sending message (retry={}) -> {}'.format(retry, message))
                 self.client.sock.sendto(message.serialize(), self.address)
                 # ACK mode and timer to resend
                 self.state = self.STATE_ACK
@@ -324,9 +334,9 @@ class ClientSessionServer(ClientSession):
                 log.debug('[STATE_ACK] (Message queued') # don't print the message because it doesn't have sequence yet
                 self.message_queue.append(dictdata)
 
-        elif (retry == 0): # last attempt
+        elif (retry > -1): # next attempts
             message = InstantProtocolMessage(dictdata=dictdata)
-            log.debug('[STATE_IDLE] Sending message (retry=0) -> {}'.format(message))
+            log.debug('[STATE_IDLE] Sending message (retry={}) -> {}'.format(retry, message))
             self.client.sock.sendto(message.serialize(), self.address)
             self.timer = threading.Timer(self.RESEND_TIMER, self._send, [dictdata, retry - 1])
             self.timer.start()
@@ -376,7 +386,7 @@ class ClientSessionClient(ClientSession):
                 log.debug('[STATE_IDLE] Message dequeued')
 
     # Private function (send with reliability)
-    def _send(self, dictdata, retry=1):
+    def _send(self, dictdata, retry=5):
         # When ACK there's no UDP reliability
         if ((dictdata.get('ack') == 0x01)):
             self.last_seq_recv = dictdata.get('sequence') # if we send an ACK, we are acknowledging the last sequence
@@ -384,13 +394,13 @@ class ClientSessionClient(ClientSession):
             log.debug('[---] Sending ACK -> {}'.format(message))
             self.client.sock.sendto(message.serialize(), self.address)
         ## UDP reliability
-        elif (retry == 1): # first attempt
+        elif (retry == 5): # first attempt
             # Can we send?
             if (self.state == self.STATE_IDLE):
                 self.last_seq_sent = 1 - self.last_seq_sent # swap: 0 to 1 and viceversa
                 dictdata['sequence'] = self.last_seq_sent # set sequence (different each message)
                 message = InstantProtocolMessage(dictdata=dictdata)
-                log.debug('[STATE_IDLE] Sending message (retry=1) -> {}'.format(message))
+                log.debug('[STATE_IDLE] Sending message (retry={}) -> {}'.format(retry, message))
                 self.client.sock.sendto(message.serialize(), self.address)
                 # ACK mode and timer to resend
                 self.state = self.STATE_ACK
@@ -401,9 +411,9 @@ class ClientSessionClient(ClientSession):
                 log.debug('[STATE_ACK] Message queued') # don't print the message because it doesn't have sequence yet
                 self.message_queue.append(dictdata)
 
-        elif (retry == 0): # last attempt
+        elif (retry > -1): # next attempts
             message = InstantProtocolMessage(dictdata=dictdata)
-            log.debug('[STATE_IDLE] Sending message (retry=0) -> {}'.format(message))
+            log.debug('[STATE_IDLE] Sending message (retry={}) -> {}'.format(retry, message))
             self.client.sock.sendto(message.serialize(), self.address)
             self.timer = threading.Timer(self.RESEND_TIMER, self._send, [dictdata, retry - 1])
             self.timer.start()

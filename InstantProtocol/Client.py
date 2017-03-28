@@ -5,10 +5,8 @@
 
 import socket
 import sys
-import os
-import logging as log
-import time
 import select
+import logging as log
 
 # Temporal
 execfile('InstantProtocol.py')
@@ -50,7 +48,7 @@ class Client(object):
                     continue
                 self.server_session.connection_request(username)
                 # readable used because of its timer (otherwise it doesn't make sense for one UDP socket)
-                readable, _, _ = select.select([ self.sock.sock ], [], [], 1) # wait 1 second
+                readable, _, _ = select.select([ self.sock.sock ], [], [], 3) # wait 1 second
                 if (not readable):
                     print('Server unreachable')
                     sys.exit(1) # error
@@ -179,5 +177,5 @@ class Client(object):
 # Execution
 if __name__ == '__main__':
     # Comment following line of code to disable log output
-    log.basicConfig(format='%(levelname)s: %(message)s', level=log.DEBUG)
-    sys.exit(Client(loss_rate=0).run())
+    #log.basicConfig(format='%(levelname)s: %(message)s', level=log.WARN) # DEBUG, INFO, WARN, CRITICAL
+    sys.exit(Client(loss_rate=0.1).run())
