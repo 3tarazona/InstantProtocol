@@ -6,6 +6,8 @@
 import threading
 import logging as log
 
+from InstantProtocol import *
+
 # Entry for each user (list as small database)
 class ClientInfo(object):
     def __init__(self, username, client_id, group_id, address):

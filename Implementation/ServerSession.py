@@ -6,8 +6,7 @@
 import threading
 import logging as log
 
-# Temporal
-execfile('InstantProtocol.py')
+from InstantProtocol import *
 
 # Exception when a Session is not found
 class SessionNotFound(Exception):

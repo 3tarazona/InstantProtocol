@@ -9,10 +9,9 @@ import struct
 import random
 import logging as log
 
-# Temporal
-execfile('InstantProtocol.py')
-execfile('SocketError.py')
-execfile('ServerSession.py')
+from InstantProtocol import *
+from SocketError import *
+from ServerSession import *
 
 class Server(object):
     def __init__(self, address=('localhost', 1313), buffer=1024, loss_rate=5):

@@ -8,10 +8,9 @@ import sys
 import select
 import logging as log
 
-# Temporal
-execfile('InstantProtocol.py')
-execfile('SocketError.py')
-execfile('ClientSession.py')
+from InstantProtocol import *
+from SocketError import *
+from ClientSession import *
 
 class Client(object):
     SERVER_ID = 0x00
